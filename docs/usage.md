@@ -148,7 +148,8 @@ python -m meshtastic_hermes repl 192.168.55.73
 #   meshtastic> channels                         # find the index you want
 #   meshtastic> send 1 hello pommeraie           # broadcast on channel 1 (channel-PSK)
 #   meshtastic> dm !444a8c86 hi there            # private direct message (end-to-end/PKI)
-#   meshtastic> recent 5                          # last 5 decoded messages
+#   meshtastic> watch 120                         # print incoming messages live (catch replies)
+#   meshtastic> recent 5                          # last 5 decoded messages (RAM buffer)
 #   meshtastic> nodes                             # type 'help' for all commands
 #   meshtastic> quit
 
@@ -158,6 +159,12 @@ python -m meshtastic_hermes observe 192.168.55.73 30
 
 The `repl` supports arrow-key history (↑/↓), inline line editing and Ctrl-R search, and
 persists history across sessions in `~/.meshtastic_hermes_history`.
+
+`recent` reads an **in-memory, per-process** buffer — it only holds text received during
+the *current* connection (it's never persisted; only metadata goes to the KB). To catch a
+reply to a `dm`, use **`watch`** in the same session: it prints incoming messages live as
+they arrive. Note that replies can still be lost to RF (multi-hop / low SNR) and won't show
+if they never reach your node.
 
 Because the live connection is an in-process singleton, stateful flows (connect → send →
 read) must happen in **one** process — use `repl` (interactive) or `observe` (capture).

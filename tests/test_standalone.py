@@ -91,3 +91,12 @@ def test_send_text_pki_requires_dest():
     ctx = build_registry()
     res = ctx.tools["meshtastic_send_text"]["handler"]({"text": "hi", "pki": True})
     assert "requires dest_id" in res
+
+
+def test_repl_watch_zero_seconds_returns(capsys, monkeypatch):
+    # `watch 0` must not hang and must exit cleanly back to the prompt.
+    lines = iter(["watch 0", "quit"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(lines))
+    rc = main(["repl"])
+    assert rc == 0
+    assert "Watching for incoming messages" in capsys.readouterr().err

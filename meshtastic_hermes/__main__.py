@@ -115,7 +115,8 @@ def _cmd_observe(ctx: FakeContext, args) -> int:
 _REPL_HELP = """Commands (channel is an INDEX from `channels`; 0 = Primary):
   send <channel> <text...>            broadcast on a channel (channel-PSK encrypted)
   dm <node_id> <text...>              private direct message (end-to-end / PKI)
-  recent [count]                      recently decoded text messages
+  recent [count]                      recently decoded text messages (RAM buffer)
+  watch [seconds]                     print incoming text messages live (default 120s)
   nodes | channels | metrics          live radio info
   kb                                  knowledge-base summary
   connect [host] | disconnect         manage the link
@@ -211,6 +212,28 @@ def _enable_readline():
     return readline, histfile
 
 
+def _watch_messages(ctx: FakeContext, seconds: float) -> None:
+    """Poll the recent-messages buffer and print NEW text messages as they arrive."""
+    recent = ctx.tools["meshtastic_recent_messages"]["handler"]
+
+    def snapshot():
+        return json.loads(recent({"limit": 1000})).get("messages", [])
+
+    seen = {(m["ts"], m.get("from"), m.get("text")) for m in snapshot()}
+    print(f"Watching for incoming messages for {int(seconds)}s (Ctrl-C to stop)...", file=sys.stderr)
+    end = time.time() + seconds
+    try:
+        while time.time() < end:
+            for m in reversed(snapshot()):  # oldest-first
+                key = (m["ts"], m.get("from"), m.get("text"))
+                if key not in seen:
+                    seen.add(key)
+                    print(f"  [{m.get('from')} -> {m.get('to')} ch{m.get('channel')}] {m.get('text')!r}")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        pass
+
+
 def _cmd_repl(ctx: FakeContext, args) -> int:
     readline, histfile = _enable_readline()
 
@@ -238,6 +261,15 @@ def _cmd_repl(ctx: FakeContext, args) -> int:
             continue
         if line == "tools":
             _cmd_list(ctx, args)
+            continue
+        if line == "watch" or line.startswith("watch "):
+            parts = line.split()
+            try:
+                secs = float(parts[1]) if len(parts) > 1 else 120.0
+            except ValueError:
+                print(json.dumps({"error": "usage: watch [seconds]"}))
+                continue
+            _watch_messages(ctx, secs)
             continue
         print(repl_command(ctx, line))
 
