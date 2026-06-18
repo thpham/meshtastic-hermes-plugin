@@ -136,7 +136,7 @@ The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` → `$HERMES_H
 | ---------------------------- | ----------------------------------------------------------------- |
 | `meshtastic_connect`         | Open TCP link to a node (uses `MESHTASTIC_HOST` if no host given) |
 | `meshtastic_disconnect`      | Close the link, stop observing                                    |
-| `meshtastic_send_text`       | Send text to a channel (or direct to a node via `dest_id`)        |
+| `meshtastic_send_text`       | Send text: broadcast (channel-PSK), or private DM to a node (`dest_id` + `pki` for end-to-end) |
 | `meshtastic_recent_messages` | Recently decoded TEXT messages (never encrypted content)          |
 | `meshtastic_list_nodes`      | Nodes from the live radio DB                                      |
 | `meshtastic_node_info`       | Detail for one node (local node if omitted)                       |

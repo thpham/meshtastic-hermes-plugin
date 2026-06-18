@@ -113,8 +113,8 @@ def _cmd_observe(ctx: FakeContext, args) -> int:
 
 
 _REPL_HELP = """Commands (channel is an INDEX from `channels`; 0 = Primary):
-  send <channel> <text...>            broadcast text on a channel
-  dm <node_id> <channel> <text...>    direct message to one node
+  send <channel> <text...>            broadcast on a channel (channel-PSK encrypted)
+  dm <node_id> <text...>              private direct message (end-to-end / PKI)
   recent [count]                      recently decoded text messages
   nodes | channels | metrics          live radio info
   kb                                  knowledge-base summary
@@ -157,18 +157,12 @@ def repl_command(ctx: FakeContext, line: str) -> str:
         return call("meshtastic_send_text", {"channel_index": channel, "text": text})
 
     if verb == "dm":
-        # dm <node_id> <channel> <text...>
-        if len(parts) < 4:
-            return json.dumps({"error": "usage: dm <node_id> <channel> <text...>"})
-        try:
-            channel = int(parts[2])
-        except ValueError:
-            return json.dumps({"error": f"channel must be an integer index, got {parts[2]!r}"})
-        text = line.split(None, 3)[3]
-        return call(
-            "meshtastic_send_text",
-            {"dest_id": parts[1], "channel_index": channel, "text": text},
-        )
+        # dm <node_id> <text...>  — end-to-end (PKI) encrypted to the node's keypair,
+        # so no channel is needed and it is never sent in clear on a public channel.
+        if len(parts) < 3:
+            return json.dumps({"error": "usage: dm <node_id> <text...>  (end-to-end / PKI encrypted)"})
+        text = line.split(None, 2)[2]
+        return call("meshtastic_send_text", {"dest_id": parts[1], "pki": True, "text": text})
 
     if verb == "recent":
         if len(parts) > 1:

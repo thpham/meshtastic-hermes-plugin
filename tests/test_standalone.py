@@ -76,3 +76,18 @@ def test_repl_send_friendly_parsing():
 def test_repl_kb_friendly_verb_offline():
     ctx = build_registry()
     assert '"nodes"' in repl_command(ctx, "kb")
+
+
+def test_repl_dm_is_pki_no_channel():
+    ctx = build_registry()
+    assert "usage: dm" in repl_command(ctx, "dm")
+    # dm needs only node + text (no channel); offline -> not connected proves it
+    # reached the send tool.
+    assert "Not connected" in repl_command(ctx, "dm !444a8c86 hi there")
+
+
+def test_send_text_pki_requires_dest():
+    # pki without dest_id is rejected before touching the radio.
+    ctx = build_registry()
+    res = ctx.tools["meshtastic_send_text"]["handler"]({"text": "hi", "pki": True})
+    assert "requires dest_id" in res

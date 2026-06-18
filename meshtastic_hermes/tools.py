@@ -18,6 +18,9 @@ from typing import Any, Callable
 from .connection import MeshtasticUnavailable, get_manager
 from .observer import get_observer
 
+# Meshtastic portnum for plain text messages (portnums.proto TEXT_MESSAGE_APP).
+_TEXT_MESSAGE_APP = 1
+
 
 def _ok(data: Any) -> str:
     return json.dumps(data, default=str)
@@ -73,12 +76,43 @@ def send_text(args: dict) -> str:
     text = (args.get("text") or "").strip()
     if not text:
         return _err("No text provided.")
+    channel_index = int(args.get("channel_index", 0))
+    dest_id = args.get("dest_id")
+    pki = bool(args.get("pki", False))
+
+    if pki and not dest_id:
+        return _err("pki=true requires dest_id — public-key encryption is point-to-point.")
+
     iface = get_manager().iface
-    kwargs: dict[str, Any] = {"channelIndex": int(args.get("channel_index", 0))}
-    if args.get("dest_id"):
-        kwargs["destinationId"] = args["dest_id"]
-    iface.sendText(text, **kwargs)
-    return _ok({"sent": True, "text": text, "channel_index": kwargs["channelIndex"], "dest_id": args.get("dest_id")})
+    if pki:
+        # End-to-end: the firmware encrypts the payload to the recipient's public
+        # key (Curve25519), independent of the channel PSK. Requires the recipient's
+        # key to be known to the local node (firmware 2.5+). channel_index is only
+        # the routing slot here.
+        iface.sendData(
+            text.encode("utf-8"),
+            destinationId=dest_id,
+            portNum=_TEXT_MESSAGE_APP,
+            channelIndex=channel_index,
+            pkiEncrypted=True,
+        )
+    else:
+        # Channel-PSK encryption: readable by anyone holding the channel key (and on
+        # the default Primary channel that key is public).
+        kwargs: dict[str, Any] = {"channelIndex": channel_index}
+        if dest_id:
+            kwargs["destinationId"] = dest_id
+        iface.sendText(text, **kwargs)
+
+    return _ok(
+        {
+            "sent": True,
+            "encryption": "pki" if pki else "channel",
+            "text": text,
+            "channel_index": channel_index,
+            "dest_id": dest_id,
+        }
+    )
 
 
 @_guard

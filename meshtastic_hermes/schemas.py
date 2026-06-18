@@ -27,15 +27,23 @@ DISCONNECT = {
 SEND_TEXT = {
     "name": "meshtastic_send_text",
     "description": (
-        "Send a text message over the mesh. Broadcasts to a channel by default, or "
-        "directs the message to a specific node when dest_id is given."
+        "Send a text message over the mesh. Encryption depends on the arguments:\n"
+        "- Broadcast (no dest_id): goes to everyone on the channel, encrypted with that "
+        "channel's pre-shared key. On the default Primary channel that key is public, so "
+        "treat plain channel sends as NON-private.\n"
+        "- Direct to a node (dest_id) WITHOUT pki: still only channel-PSK encrypted — not "
+        "private from other channel members.\n"
+        "- Direct to a node with pki=true: end-to-end public-key encryption (Curve25519) to "
+        "that node only. Use this for private direct messages. Requires the recipient's key "
+        "to be known to the radio (firmware 2.5+)."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "text": {"type": "string", "description": "Message body to send."},
-            "channel_index": {"type": "integer", "description": "Channel index to send on (default 0 / primary)."},
-            "dest_id": {"type": "string", "description": "Destination node id like '!a1b2c3d4'. Omit to broadcast."},
+            "channel_index": {"type": "integer", "description": "Channel index (default 0 / Primary). For pki sends this is only the routing slot, not the encryption key."},
+            "dest_id": {"type": "string", "description": "Destination node id like '!a1b2c3d4'. Omit to broadcast to the channel."},
+            "pki": {"type": "boolean", "description": "Encrypt end-to-end to the recipient's public key (requires dest_id). Use for private direct messages."},
         },
         "required": ["text"],
     },

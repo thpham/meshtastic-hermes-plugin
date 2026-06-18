@@ -146,8 +146,8 @@ python -m meshtastic_hermes call meshtastic_kb_summary
 # Friendly verbs take the channel INDEX before the text (avoids a Primary flood):
 python -m meshtastic_hermes repl 192.168.55.73
 #   meshtastic> channels                         # find the index you want
-#   meshtastic> send 1 hello pommeraie           # broadcast on channel 1
-#   meshtastic> dm !444a8c86 1 hi there          # direct message on channel 1
+#   meshtastic> send 1 hello pommeraie           # broadcast on channel 1 (channel-PSK)
+#   meshtastic> dm !444a8c86 hi there            # private direct message (end-to-end/PKI)
 #   meshtastic> recent 5                          # last 5 decoded messages
 #   meshtastic> nodes                             # type 'help' for all commands
 #   meshtastic> quit
@@ -160,6 +160,23 @@ Because the live connection is an in-process singleton, stateful flows (connect 
 read) must happen in **one** process — use `repl` (interactive) or `observe` (capture).
 `observe` is the quickest end-to-end check against real hardware. Tools that need a radio
 return a clear JSON error when not connected, so `list`/`call` are safe to run anywhere.
+
+### Send encryption: `send` vs `dm`
+
+These are not the same privacy level:
+
+- **`send <channel> <text>`** (broadcast) is encrypted with that **channel's pre-shared
+  key**. On the default Primary channel the key is public, so anyone can read it — treat
+  channel sends as non-private.
+- **`dm <node_id> <text>`** uses **end-to-end public-key encryption** (Curve25519) to that
+  node only — it is *not* sent in clear on a public channel. This maps to
+  `meshtastic_send_text` with `pki=true`, which goes through the firmware's PKI path
+  (`sendData(pkiEncrypted=True)`), so the channel is just a routing slot.
+
+PKI requires the recipient's public key to be known to your node (Meshtastic firmware
+2.5+). A directed message *without* `pki` (`meshtastic_send_text` with `dest_id` but no
+`pki`) is only channel-PSK encrypted — addressed to one node, but readable by anyone on
+that channel.
 
 ## CLI
 
