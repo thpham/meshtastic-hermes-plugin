@@ -62,9 +62,9 @@ Useful queries:
 - `meshtastic_kb_neighbors` — inferred direct contacts of a node, ranked by count.
 
 The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` (explicit override) →
-systemd's `$STATE_DIRECTORY` (set automatically for a NixOS service with `StateDirectory=`,
-where `$HOME` is often non-writable) → `~/.hermes/meshtastic_kb.sqlite` (desktop default).
-You can inspect it directly:
+`$HERMES_HOME` (Hermes' own home — `/var/lib/hermes/.hermes` under the NixOS service, so
+the KB sits next to `config.yaml`) → systemd's `$STATE_DIRECTORY` → `~/.hermes/` (desktop
+default). You can inspect it directly:
 
 ```bash
 sqlite3 ~/.hermes/meshtastic_kb.sqlite "SELECT from_node, to_node, portnum, encrypted FROM interactions ORDER BY ts DESC LIMIT 20;"

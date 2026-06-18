@@ -50,39 +50,44 @@ crashing.)
 
 ### On NixOS (flake) — recommended for deployment
 
-The flake exposes an **overlay** that injects `meshtastic-hermes-plugin` into the Python
-package set, so it builds against the exact Python your Hermes service uses:
+This plugin ships the `hermes_agent.plugins` entry point, so it plugs into Hermes'
+[`extraPythonPackages`](https://hermes-agent.nousresearch.com/docs/getting-started/nix-setup/)
+option (a list of packages). The flake's **overlay** injects `meshtastic-hermes-plugin`
+into the Python package set so it builds against the *same* Python your Hermes service
+uses (the overlay populates `python311Packages`, `python312Packages`, … via
+`pythonPackagesExtensions` — pick the set matching your Hermes build):
 
 ```nix
 {
+  inputs.hermes-agent.url = "github:NousResearch/hermes-agent";
   inputs.meshtastic-hermes-plugin.url = "github:thpham/meshtastic-hermes-plugin";
 
-  # In your NixOS configuration:
+  # In your NixOS configuration (module args provide pkgs):
   nixpkgs.overlays = [ inputs.meshtastic-hermes-plugin.overlays.default ];
-  services.hermes-agent.extraPythonPackages = [
-    pkgs.python3Packages.meshtastic-hermes-plugin
-  ];
+
+  services.hermes-agent = {
+    enable = true;
+    extraPythonPackages = [ pkgs.python3Packages.meshtastic-hermes-plugin ];
+
+    # Enable it here — NOT via `hermes plugins enable`. On NixOS config.yaml is
+    # Nix-generated and marked `.managed`, so CLI mutations are blocked.
+    settings.plugins.enabled = [ "meshtastic" ];
+
+    # Optional: auto-connect on session start (non-secret env).
+    environment.MESHTASTIC_HOST = "192.168.1.50";
+  };
 }
 ```
 
-`meshtastic` comes in transitively from nixpkgs. You still enable the plugin in Hermes
-(`plugins.enabled`) — see [Configuration](#configuration).
+`meshtastic` comes in transitively from nixpkgs (no need to list it separately).
+Alternatively, pass the standalone package output directly:
+`extraPythonPackages = [ inputs.meshtastic-hermes-plugin.packages.${pkgs.system}.default ];`
+— but prefer the overlay so the build matches Hermes' Python ABI.
 
-**Knowledge-base path under systemd:** the KB auto-uses systemd's `$STATE_DIRECTORY` when
-present, so a service declaring `StateDirectory=` gets a writable, persistent DB at
-`/var/lib/<dir>/meshtastic_kb.sqlite` with no extra config (the service user's `$HOME` is
-often non-writable). To pin it explicitly, set `MESHTASTIC_HERMES_DB`:
-
-```nix
-systemd.services.hermes-agent = {
-  serviceConfig.StateDirectory = "hermes";                       # -> /var/lib/hermes (writable)
-  # optional explicit override:
-  # environment.MESHTASTIC_HERMES_DB = "/var/lib/hermes/meshtastic_kb.sqlite";
-};
-```
-
-There's also a standalone package output (`nix build`, or
-`inputs.<this>.packages.${system}.default`) if you want to build/inspect it directly.
+**Knowledge-base path:** no config needed. The KB resolves to `$HERMES_HOME` (Hermes'
+own home — `/var/lib/hermes/.hermes` under the service), so it sits next to Hermes'
+`config.yaml`. Override with `MESHTASTIC_HERMES_DB` via `services.hermes-agent.environment`
+if you want it elsewhere. See [Configuration](#configuration).
 
 ### Local development (`nix develop` / direnv)
 
@@ -116,13 +121,14 @@ Two optional environment variables (prompted during `hermes plugins install`):
 | Variable               | Purpose                                            | Default                          |
 | ---------------------- | -------------------------------------------------- | -------------------------------- |
 | `MESHTASTIC_HOST`      | Node host/IP for TCP auto-connect on session start | _unset_ (no auto-connect)        |
-| `MESHTASTIC_HERMES_DB` | SQLite knowledge-base path                         | `$STATE_DIRECTORY/meshtastic_kb.sqlite` if set (systemd), else `~/.hermes/meshtastic_kb.sqlite` |
+| `MESHTASTIC_HERMES_DB` | SQLite knowledge-base path                         | `$HERMES_HOME/meshtastic_kb.sqlite` (next to Hermes' config), else `~/.hermes/meshtastic_kb.sqlite` |
 
 When `MESHTASTIC_HOST` is set, the plugin auto-connects (and starts observing) on each
 new session; otherwise call `meshtastic_connect` explicitly.
 
-The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` → systemd's
-`$STATE_DIRECTORY` (writable/persistent under a NixOS service) → `~/.hermes/`.
+The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` → `$HERMES_HOME`
+(Hermes' own home, e.g. `/var/lib/hermes/.hermes` under the NixOS service) → systemd's
+`$STATE_DIRECTORY` → `~/.hermes/`.
 
 ## Tools
 

@@ -109,12 +109,22 @@ def test_interactions_filter_by_node_and_since(kb):
 
 def test_db_path_prefers_explicit_env(monkeypatch):
     monkeypatch.setenv("MESHTASTIC_HERMES_DB", "/custom/kb.sqlite")
+    monkeypatch.setenv("HERMES_HOME", "/var/lib/hermes/.hermes")
     monkeypatch.setenv("STATE_DIRECTORY", "/var/lib/hermes")
     assert default_db_path() == "/custom/kb.sqlite"
 
 
+def test_db_path_uses_hermes_home(monkeypatch):
+    # HERMES_HOME is the Hermes-native location (next to its config.yaml).
+    monkeypatch.delenv("MESHTASTIC_HERMES_DB", raising=False)
+    monkeypatch.setenv("HERMES_HOME", "/var/lib/hermes/.hermes")
+    monkeypatch.setenv("STATE_DIRECTORY", "/var/lib/hermes")  # outranked by HERMES_HOME
+    assert default_db_path() == "/var/lib/hermes/.hermes/meshtastic_kb.sqlite"
+
+
 def test_db_path_uses_systemd_state_directory(monkeypatch):
     monkeypatch.delenv("MESHTASTIC_HERMES_DB", raising=False)
+    monkeypatch.delenv("HERMES_HOME", raising=False)
     # systemd may hand over a colon-separated list; first entry wins.
     monkeypatch.setenv("STATE_DIRECTORY", "/var/lib/hermes:/var/lib/other")
     assert default_db_path() == "/var/lib/hermes/meshtastic_kb.sqlite"
@@ -122,6 +132,7 @@ def test_db_path_uses_systemd_state_directory(monkeypatch):
 
 def test_db_path_falls_back_to_home(monkeypatch):
     monkeypatch.delenv("MESHTASTIC_HERMES_DB", raising=False)
+    monkeypatch.delenv("HERMES_HOME", raising=False)
     monkeypatch.delenv("STATE_DIRECTORY", raising=False)
     monkeypatch.setenv("HOME", "/home/alice")
     assert default_db_path() == "/home/alice/.hermes/meshtastic_kb.sqlite"

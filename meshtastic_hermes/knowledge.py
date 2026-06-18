@@ -26,16 +26,21 @@ def default_db_path() -> str:
     """Resolve the knowledge-base path, in priority order:
 
     1. ``MESHTASTIC_HERMES_DB`` — explicit override.
-    2. ``STATE_DIRECTORY`` — set automatically by systemd for units declaring
-       ``StateDirectory=`` (the common NixOS deployment). The service user's
-       ``$HOME`` is frequently non-writable there (DynamicUser, ProtectHome,
-       ``/var/empty``), whereas the state directory is guaranteed writable and
-       persistent. systemd may pass a colon-separated list; use the first entry.
-    3. ``~/.hermes/meshtastic_kb.sqlite`` — the interactive/desktop default.
+    2. ``HERMES_HOME`` — Hermes' own home directory (``/var/lib/hermes/.hermes`` on
+       a NixOS service, ``~/.hermes`` on desktop). Hermes sets this for its own
+       process and the Nix module exports it system-wide, so the KB lands right
+       next to Hermes' ``config.yaml`` in every deployment.
+    3. ``STATE_DIRECTORY`` — systemd's guaranteed-writable state dir, as a fallback
+       if HERMES_HOME is somehow unset. systemd may pass a colon-separated list;
+       use the first entry.
+    4. ``~/.hermes/meshtastic_kb.sqlite`` — last-resort desktop default.
     """
     env = os.environ.get("MESHTASTIC_HERMES_DB")
     if env:
         return env
+    hermes_home = os.environ.get("HERMES_HOME")
+    if hermes_home:
+        return str(Path(hermes_home) / "meshtastic_kb.sqlite")
     state_dir = os.environ.get("STATE_DIRECTORY")
     if state_dir:
         return str(Path(state_dir.split(":", 1)[0]) / "meshtastic_kb.sqlite")
