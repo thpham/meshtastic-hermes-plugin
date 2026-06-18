@@ -40,6 +40,7 @@ class FakeContext:
         self.hooks: dict[str, list] = {}
         self.commands: dict[str, dict[str, Any]] = {}
         self.cli_commands: dict[str, dict[str, Any]] = {}
+        self.skills: dict[str, Any] = {}
 
     def register_tool(self, name, toolset, schema, handler, **_kw):
         self.tools[name] = {"toolset": toolset, "schema": schema, "handler": handler}
@@ -52,6 +53,9 @@ class FakeContext:
 
     def register_cli_command(self, name, help="", setup_fn=None, handler_fn=None):  # noqa: A002
         self.cli_commands[name] = {"help": help, "setup_fn": setup_fn, "handler_fn": handler_fn}
+
+    def register_skill(self, name, path):
+        self.skills[name] = path
 
 
 def build_registry() -> FakeContext:
@@ -73,10 +77,13 @@ def _cmd_list(ctx: FakeContext, _args) -> int:
     for name, tool in ctx.tools.items():
         desc = (tool["schema"].get("description") or "").strip().splitlines()
         print(f"{name}\n    {desc[0] if desc else ''}")
+    if ctx.skills:
+        print("\nskills: " + ", ".join(f"meshtastic:{n}" for n in sorted(ctx.skills)))
     hooks = sum(len(v) for v in ctx.hooks.values())
     print(
         f"\n{len(ctx.tools)} tools, {hooks} hooks, "
-        f"{len(ctx.commands)} slash command(s), {len(ctx.cli_commands)} CLI command(s)"
+        f"{len(ctx.commands)} slash command(s), {len(ctx.cli_commands)} CLI command(s), "
+        f"{len(ctx.skills)} skill(s)"
     )
     return 0
 

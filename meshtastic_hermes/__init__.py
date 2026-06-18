@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from pathlib import Path
 
 from . import schemas, tools
 from .connection import get_manager
@@ -133,5 +134,13 @@ def register(ctx):
             setup_fn=_setup_argparse,
             handler_fn=_cli_handler,
         )
+
+    # Bundle skills shipped under skills/<name>/SKILL.md (loaded as `meshtastic:<name>`).
+    skills_dir = Path(__file__).parent / "skills"
+    if skills_dir.is_dir():
+        for child in sorted(skills_dir.iterdir()):
+            skill_md = child / "SKILL.md"
+            if child.is_dir() and skill_md.exists():
+                ctx.register_skill(child.name, skill_md)
 
     logger.info("meshtastic plugin registered (%d tools)", len(_TOOLS))

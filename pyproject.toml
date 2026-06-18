@@ -36,9 +36,9 @@ meshtastic-platform = "meshtastic_platform"
 packages = ["meshtastic_hermes", "meshtastic_platform"]
 
 [tool.setuptools.package-data]
-# Ship the manifests so the package directories also work as drop-in plugin dirs.
-meshtastic_hermes = ["plugin.yaml"]
-meshtastic_platform = ["plugin.yaml"]
+# Ship the manifests + bundled skills so the package dirs work as drop-in plugin dirs.
+meshtastic_hermes = ["plugin.yaml", "skills/*/SKILL.md"]
+meshtastic_platform = ["plugin.yaml", "skills/*/SKILL.md"]
 
 [tool.ruff]
 line-length = 100

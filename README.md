@@ -42,12 +42,14 @@ meshtastic_hermes/        # tools plugin (name: meshtastic)
 ├── observer.py           # receive handler → knowledge base + recent-text buffer
 ├── knowledge.py          # NodeGraph: SQLite store of nodes + interactions
 ├── gateway_bridge.py     # pure inbound/outbound mapping + reply policy (shared)
-└── __main__.py           # standalone harness: list/call/repl/observe/bridge
+├── __main__.py           # standalone harness: list/call/repl/observe/bridge
+└── skills/               # bundled SKILL.md workflows (mesh-recon, messaging-safety)
 
 meshtastic_platform/      # gateway adapter plugin (kind: platform)
 ├── plugin.yaml           # manifest (kind: platform)
 ├── __init__.py           # register(ctx) → ctx.register_platform(...)
-└── adapter.py            # MeshtasticAdapter(BasePlatformAdapter)
+├── adapter.py            # MeshtasticAdapter(BasePlatformAdapter)
+└── skills/               # bundled SKILL.md workflow (mesh-responder)
 ```
 
 The `meshtastic` radio library is a **hard dependency**, so any pip-based install pulls
@@ -166,6 +168,18 @@ The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` → `$HERMES_H
 
 It also registers a `/meshtastic` slash command (status + KB summary) and a
 `hermes meshtastic <status|kb-summary>` CLI command.
+
+### Bundled skills
+
+Both plugins ship [Hermes skills](https://hermes-agent.nousresearch.com/docs/guides/build-a-hermes-plugin#bundle-skills)
+(`skills/<name>/SKILL.md`) that teach the agent how to use the tools well. They're opt-in
+explicit loads (`skill_view("meshtastic:<name>")`), not auto-listed:
+
+| Skill                                | Plugin  | Teaches                                                          |
+| ------------------------------------ | ------- | ---------------------------------------------------------------- |
+| `meshtastic:mesh-recon`              | tools   | connect → observe → analyze the KB to map nodes & relationships  |
+| `meshtastic:messaging-safety`        | tools   | choose broadcast / channel / encrypted DM; read the `ack` result |
+| `meshtastic-platform:mesh-responder` | gateway | reply briefly, plain-text, on the right channel, no loops        |
 
 ## Bidirectional gateway (Hermes platform adapter)
 

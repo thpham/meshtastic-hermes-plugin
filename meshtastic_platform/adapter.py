@@ -194,6 +194,17 @@ def _env_enablement():
 
 def register(ctx):
     """Plugin entry point: called once by the Hermes plugin system."""
+    # Bundle skills (loaded as `meshtastic-platform:<name>`), independent of whether the
+    # gateway runtime is present.
+    from pathlib import Path
+
+    skills_dir = Path(__file__).parent / "skills"
+    if skills_dir.is_dir():
+        for child in sorted(skills_dir.iterdir()):
+            skill_md = child / "SKILL.md"
+            if child.is_dir() and skill_md.exists():
+                ctx.register_skill(child.name, skill_md)
+
     if not _HAVE_GATEWAY:
         logger.warning("gateway.platforms.base unavailable — Meshtastic platform not registered")
         return

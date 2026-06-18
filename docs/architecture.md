@@ -27,7 +27,8 @@ Called once at startup. Registers the 12 tools under the `meshtastic` toolset, t
 lifecycle hooks (`on_session_start` auto-connects when `MESHTASTIC_HOST` is set;
 `on_session_end` disconnects), a `/meshtastic` slash command, and a `hermes meshtastic`
 CLI command. Slash/CLI registration is feature-detected (`hasattr(ctx, ...)`) so older
-Hermes builds still load the plugin.
+Hermes builds still load the plugin. It also registers bundled skills from
+`skills/<name>/SKILL.md` via `ctx.register_skill` (loaded on demand as `meshtastic:<name>`).
 
 ### `connection.py` — `ConnectionManager` (singleton)
 
