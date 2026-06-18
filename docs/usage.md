@@ -11,9 +11,19 @@
 
 ## Deploying on NixOS
 
-Hermes ships a Nix flake with a NixOS module; this plugin ships an overlay. Wire them
-together — `extraPythonPackages` takes the plugin (a list of packages), and
-`settings.plugins.enabled` turns it on:
+Hermes ships a Nix flake (NixOS module) and this repo ships an overlay that adds the
+package to your Python set. This one package provides **both** plugins:
+
+| Plugin name (in `plugins.enabled`) | Package      | What it does                                   |
+| ---------------------------------- | ------------ | ---------------------------------------------- |
+| `meshtastic`                       | the tools/KB plugin | 12 tools, knowledge base, slash + CLI commands |
+| `meshtastic-platform`              | the gateway adapter | inbound mesh text drives the agent; replies go back over the radio |
+
+Enable either or both. They cooperate over one radio connection (a process-wide
+singleton), so you point them at the same `MESHTASTIC_HOST` — whichever connects first
+wins and the other reuses it (no churn).
+
+### 1. Flake wiring
 
 ```nix
 # flake.nix
@@ -37,30 +47,82 @@ together — `extraPythonPackages` takes the plugin (a list of packages), and
 }
 ```
 
+### 2. Service config (complete example)
+
 ```nix
 # hermes.nix
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 {
   services.hermes-agent = {
     enable = true;
+    addToSystemPackages = true;          # put `hermes` on PATH + set HERMES_HOME system-wide
 
-    # The plugin (meshtastic comes in transitively). The overlay also populates
-    # python312Packages etc. — use the set matching your Hermes build if it pins one.
+    # Hermes needs an LLM. Pick a model; keep the API key OUT of the Nix store by
+    # supplying it via an environment file (sops-nix / agenix), not `environment`.
+    settings.model.default = "anthropic/claude-sonnet-4";
+    environmentFiles = [ config.sops.secrets."hermes-env".path ];  # e.g. ANTHROPIC_API_KEY=...
+
+    # This package provides BOTH plugins; the overlay also populates python312Packages
+    # etc. — use the set matching your Hermes build if it pins a specific Python.
     extraPythonPackages = [ pkgs.python3Packages.meshtastic-hermes-plugin ];
 
-    # Turn the plugin on (CLI `hermes plugins enable` is blocked on NixOS).
-    settings.plugins.enabled = [ "meshtastic" ];
+    # Enable plugins by name (CLI `hermes plugins enable` is blocked on NixOS — the
+    # generated config.yaml is `.managed`). Drop "meshtastic-platform" if you only want
+    # the tools/KB and no autonomous replies.
+    settings.plugins.enabled = [ "meshtastic" "meshtastic-platform" ];
 
-    # Auto-connect + observe on session start (non-secret env).
-    environment.MESHTASTIC_HOST = "192.168.55.73";
-    # KB defaults to $HERMES_HOME/meshtastic_kb.sqlite; override if you like:
-    # environment.MESHTASTIC_HERMES_DB = "/var/lib/hermes/meshtastic_kb.sqlite";
+    # Non-secret env shared by both plugins:
+    environment = {
+      MESHTASTIC_HOST = "192.168.55.73";      # node to connect to (TCP)
+      # Gateway reply policy (meshtastic-platform):
+      MESHTASTIC_REPLY_CHANNELS = "1";        # reply to DMs + channel 1 (your private channel)
+      # MESHTASTIC_REPLY_ALL = "true";        # …or reply on every channel incl. public Primary
+      # MESHTASTIC_HERMES_DB = "/var/lib/hermes/meshtastic_kb.sqlite";  # KB path override
+    };
   };
 }
 ```
 
-After `nixos-rebuild switch`, the KB persists at `/var/lib/hermes/.hermes/meshtastic_kb.sqlite`
-(next to Hermes' own `config.yaml`).
+`meshtastic` (the radio library) comes in transitively — no need to list it. If you don't
+use a secrets manager yet, you can put the API key in `environment` for testing, but it
+lands in the world-readable Nix store — avoid for anything real.
+
+### 3. Apply & verify
+
+```bash
+sudo nixos-rebuild switch
+systemctl status hermes-agent
+journalctl -u hermes-agent -f      # watch it connect to the node + load plugins
+```
+
+After switch, the KB persists at `/var/lib/hermes/.hermes/meshtastic_kb.sqlite` (next to
+Hermes' own `config.yaml`).
+
+## Gateway: autonomous replies over the mesh
+
+With `meshtastic-platform` enabled, the mesh becomes a Hermes chat channel — no tool calls
+needed. Someone messages your node and the agent answers:
+
+1. A peer sends a message **to your connected node** (`MESHTASTIC_HOST`).
+2. The adapter decodes it and hands it to the agent as a normal turn.
+3. The agent's reply is sent back over the radio — **PKI end-to-end** for a DM, or on the
+   channel for a channel message.
+
+**Reply policy** (env on the service):
+
+| Env | Effect |
+| --- | --- |
+| _unset_ | DMs only (default) — safest, no channel noise |
+| `MESHTASTIC_REPLY_CHANNELS="1"` or `"1,2"` | DMs + those channel indices (your private channels; public Primary/0 excluded) |
+| `MESHTASTIC_REPLY_ALL="true"` | DMs + every channel (incl. public Primary — use with care) |
+
+**Before deploying, validate the exact behavior locally** with the bridge simulator (no
+Hermes, no transmit) — see [Simulate the gateway loop](#standalone-testing-without-hermes)
+below. It uses the same routing/policy code as the adapter.
+
+**Reachability caveat:** the agent only answers messages it actually *receives*. A peer's
+message must be addressed to your connected node and survive the RF path — multi-hop DMs on
+weak links are frequently lost, so an unanswered message is usually packet loss, not a bug.
 
 ## Quick start
 
@@ -155,7 +217,27 @@ python -m meshtastic_hermes repl 192.168.55.73
 
 # One-shot: connect, observe live traffic for N seconds, dump nodes + KB
 python -m meshtastic_hermes observe 192.168.55.73 30
+
+# Simulate the GATEWAY loop (same routing/policy as the platform adapter, no Hermes):
+# prints each matched inbound message and the reply it WOULD send.
+python -m meshtastic_hermes bridge 192.168.55.73              # DMs only, dry-run (no transmit)
+python -m meshtastic_hermes bridge 192.168.55.73 --channels 1 # DMs + channel 1, dry-run
+python -m meshtastic_hermes bridge 192.168.55.73 --channels 1 --send  # actually echo-reply
+python -m meshtastic_hermes bridge 192.168.55.73 --all        # every channel incl. Primary
 ```
+
+The `bridge` simulator prints a line per matched message and exits after the window
+(default 300s, or pass a seconds arg; Ctrl-C stops early):
+
+```
+[inbound DM] !a696579c: 'hello tom'
+  -> reply to !a696579c: 'ack: hello tom'   (dry-run — pass --send to actually transmit)
+```
+
+Its reply comes from a stub `simulate_reply()` (echo) — replace it with an LLM/webhook to
+prototype an autonomous bot. The real Hermes adapter uses the agent/LLM instead. Only
+messages addressed to your connected node and decryptable are matched; DMs you send *to
+other* nodes are encrypted to them and never appear here.
 
 The `repl` supports arrow-key history (↑/↓), inline line editing and Ctrl-R search, and
 persists history across sessions in `~/.meshtastic_hermes_history`.
