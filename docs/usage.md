@@ -212,8 +212,12 @@ python -m meshtastic_hermes repl 192.168.55.73
 #   meshtastic> dm !444a8c86 hi there            # private direct message (end-to-end/PKI)
 #   meshtastic> watch 120                         # print incoming messages live (catch replies)
 #   meshtastic> recent 5                          # last 5 decoded messages (RAM buffer)
-#   meshtastic> nodes                             # type 'help' for all commands
-#   meshtastic> quit
+#   meshtastic> nodes                             # live radio node DB
+#   meshtastic> kb                                # knowledge-base summary
+#   meshtastic> kbnodes packets                   # KB nodes sorted by packet count
+#   meshtastic> neighbors !a696579c               # inferred direct contacts of a node
+#   meshtastic> interactions !a696579c 1781800000 # interaction metadata (node + since-ts)
+#   meshtastic> quit                              # type 'help' for all commands
 
 # One-shot: connect, observe live traffic for N seconds, dump nodes + KB
 python -m meshtastic_hermes observe 192.168.55.73 30

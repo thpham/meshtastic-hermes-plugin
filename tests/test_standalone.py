@@ -78,6 +78,21 @@ def test_repl_kb_friendly_verb_offline():
     assert '"nodes"' in repl_command(ctx, "kb")
 
 
+def test_repl_kb_query_verbs_offline():
+    ctx = build_registry()
+    # neighbors requires a node_id
+    assert "usage: neighbors" in repl_command(ctx, "neighbors")
+    # neighbors <node> -> kb_neighbors (offline KB works, returns the node + list)
+    out = repl_command(ctx, "neighbors !a696579c")
+    assert '"node_id": "!a696579c"' in out and '"neighbors"' in out
+    # interactions [node] [since] -> kb_interactions
+    assert '"interactions"' in repl_command(ctx, "interactions")
+    assert '"interactions"' in repl_command(ctx, "interactions !a696579c 1000")
+    assert "since_unix_ts" in repl_command(ctx, "interactions !a notanumber")
+    # kbnodes [sort] -> kb_nodes
+    assert '"nodes"' in repl_command(ctx, "kbnodes packets")
+
+
 def test_repl_dm_is_pki_no_channel():
     ctx = build_registry()
     assert "usage: dm" in repl_command(ctx, "dm")

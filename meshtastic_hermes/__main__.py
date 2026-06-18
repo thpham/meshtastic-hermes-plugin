@@ -119,6 +119,9 @@ _REPL_HELP = """Commands (channel is an INDEX from `channels`; 0 = Primary):
   watch [seconds]                     print incoming text messages live (default 120s)
   nodes | channels | metrics          live radio info
   kb                                  knowledge-base summary
+  kbnodes [sort]                      KB nodes (sort: last_seen|first_seen|packets|name)
+  interactions [node_id] [since_ts]   observed interaction metadata (filterable)
+  neighbors <node_id>                 inferred direct contacts of a node
   connect [host] | disconnect         manage the link
   <tool_name> [json]                  call any tool raw (e.g. meshtastic_kb_nodes {"limit":5})
   tools | help | quit"""
@@ -175,6 +178,26 @@ def repl_command(ctx: FakeContext, line: str) -> str:
 
     if verb == "connect":
         return call("meshtastic_connect", {"host": parts[1]} if len(parts) > 1 else {})
+
+    if verb == "neighbors":
+        if len(parts) < 2:
+            return json.dumps({"error": "usage: neighbors <node_id>"})
+        return call("meshtastic_kb_neighbors", {"node_id": parts[1]})
+
+    if verb == "interactions":
+        payload: dict = {}
+        if len(parts) > 1:
+            payload["node_id"] = parts[1]
+        if len(parts) > 2:
+            try:
+                payload["since"] = float(parts[2])
+            except ValueError:
+                return json.dumps({"error": "usage: interactions [node_id] [since_unix_ts]"})
+        return call("meshtastic_kb_interactions", payload)
+
+    if verb == "kbnodes":
+        # kbnodes [sort]  — sort in: last_seen | first_seen | packets | name
+        return call("meshtastic_kb_nodes", {"sort": parts[1]} if len(parts) > 1 else {})
 
     if verb in _REPL_SIMPLE:
         return call(_REPL_SIMPLE[verb])
