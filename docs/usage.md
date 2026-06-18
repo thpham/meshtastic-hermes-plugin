@@ -125,6 +125,30 @@ default). You can inspect it directly:
 sqlite3 ~/.hermes/meshtastic_kb.sqlite "SELECT from_node, to_node, portnum, encrypted FROM interactions ORDER BY ts DESC LIMIT 20;"
 ```
 
+## Standalone testing (without Hermes)
+
+Before wiring the plugin into Hermes, you can exercise it directly via the bundled
+harness. It registers the plugin through a fake Hermes context — so registration,
+schemas, hooks and the real tool handlers all run — then dispatches tools for you. The
+`meshtastic_kb_*` tools work fully offline; connecting/observing needs a reachable node.
+
+```bash
+# List everything register() wired up (tools, hooks, commands)
+python -m meshtastic_hermes list            # or: just standalone list
+
+# Call any tool with optional JSON args (handlers return JSON)
+python -m meshtastic_hermes call meshtastic_kb_summary
+python -m meshtastic_hermes call meshtastic_send_text '{"text": "hello mesh"}'
+
+# Connect to a node, observe live traffic for N seconds, then dump nodes + KB
+python -m meshtastic_hermes observe 192.168.1.50 30
+```
+
+`observe` is the quickest end-to-end check against real hardware: it connects, lets the
+receive observer populate the knowledge base, then prints `list_nodes`,
+`recent_messages`, and `kb_summary`. Tools that need a radio return a clear JSON error
+when you're not connected, so `list`/`call` are safe to run anywhere.
+
 ## CLI
 
 Outside a chat session:

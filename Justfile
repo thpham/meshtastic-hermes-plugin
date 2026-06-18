@@ -53,3 +53,10 @@ fmt:
 # Quick import sanity check.
 check:
     python -c "import meshtastic_hermes; print('meshtastic_hermes', meshtastic_hermes.__version__)"
+
+# Standalone harness — run the plugin without Hermes. Examples:
+#   just standalone list
+#   just standalone call meshtastic_kb_summary
+#   just standalone observe 192.168.1.50 30
+standalone *ARGS:
+    python -m meshtastic_hermes {{ARGS}}

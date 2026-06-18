@@ -153,9 +153,10 @@ It also registers a `/meshtastic` slash command (status + KB summary) and a
 ## Development
 
 ```bash
-just test          # KB unit tests (no radio required)
-just lint          # ruff
-just check         # import sanity
+just test               # unit tests (no radio required)
+just lint               # ruff
+just check              # import sanity
+just standalone list    # run the plugin without Hermes (see docs/usage.md)
 ```
 
 See [docs/architecture.md](docs/architecture.md) and [docs/usage.md](docs/usage.md).
