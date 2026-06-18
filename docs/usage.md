@@ -61,7 +61,9 @@ Useful queries:
 - `meshtastic_kb_interactions` — filter by `node_id` and/or `since` (UNIX timestamp).
 - `meshtastic_kb_neighbors` — inferred direct contacts of a node, ranked by count.
 
-The KB lives at `~/.hermes/meshtastic_kb.sqlite` (override with `MESHTASTIC_HERMES_DB`).
+The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` (explicit override) →
+systemd's `$STATE_DIRECTORY` (set automatically for a NixOS service with `StateDirectory=`,
+where `$HOME` is often non-writable) → `~/.hermes/meshtastic_kb.sqlite` (desktop default).
 You can inspect it directly:
 
 ```bash

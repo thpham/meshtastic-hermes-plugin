@@ -23,10 +23,22 @@ BROADCAST_ID = "^all"
 
 
 def default_db_path() -> str:
-    """Resolve the KB path from env, falling back to ~/.hermes/meshtastic_kb.sqlite."""
+    """Resolve the knowledge-base path, in priority order:
+
+    1. ``MESHTASTIC_HERMES_DB`` — explicit override.
+    2. ``STATE_DIRECTORY`` — set automatically by systemd for units declaring
+       ``StateDirectory=`` (the common NixOS deployment). The service user's
+       ``$HOME`` is frequently non-writable there (DynamicUser, ProtectHome,
+       ``/var/empty``), whereas the state directory is guaranteed writable and
+       persistent. systemd may pass a colon-separated list; use the first entry.
+    3. ``~/.hermes/meshtastic_kb.sqlite`` — the interactive/desktop default.
+    """
     env = os.environ.get("MESHTASTIC_HERMES_DB")
     if env:
         return env
+    state_dir = os.environ.get("STATE_DIRECTORY")
+    if state_dir:
+        return str(Path(state_dir.split(":", 1)[0]) / "meshtastic_kb.sqlite")
     return str(Path.home() / ".hermes" / "meshtastic_kb.sqlite")
 
 

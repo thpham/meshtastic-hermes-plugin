@@ -68,6 +68,19 @@ package set, so it builds against the exact Python your Hermes service uses:
 `meshtastic` comes in transitively from nixpkgs. You still enable the plugin in Hermes
 (`plugins.enabled`) — see [Configuration](#configuration).
 
+**Knowledge-base path under systemd:** the KB auto-uses systemd's `$STATE_DIRECTORY` when
+present, so a service declaring `StateDirectory=` gets a writable, persistent DB at
+`/var/lib/<dir>/meshtastic_kb.sqlite` with no extra config (the service user's `$HOME` is
+often non-writable). To pin it explicitly, set `MESHTASTIC_HERMES_DB`:
+
+```nix
+systemd.services.hermes-agent = {
+  serviceConfig.StateDirectory = "hermes";                       # -> /var/lib/hermes (writable)
+  # optional explicit override:
+  # environment.MESHTASTIC_HERMES_DB = "/var/lib/hermes/meshtastic_kb.sqlite";
+};
+```
+
 There's also a standalone package output (`nix build`, or
 `inputs.<this>.packages.${system}.default`) if you want to build/inspect it directly.
 
@@ -103,10 +116,13 @@ Two optional environment variables (prompted during `hermes plugins install`):
 | Variable               | Purpose                                            | Default                          |
 | ---------------------- | -------------------------------------------------- | -------------------------------- |
 | `MESHTASTIC_HOST`      | Node host/IP for TCP auto-connect on session start | _unset_ (no auto-connect)        |
-| `MESHTASTIC_HERMES_DB` | SQLite knowledge-base path                         | `~/.hermes/meshtastic_kb.sqlite` |
+| `MESHTASTIC_HERMES_DB` | SQLite knowledge-base path                         | `$STATE_DIRECTORY/meshtastic_kb.sqlite` if set (systemd), else `~/.hermes/meshtastic_kb.sqlite` |
 
 When `MESHTASTIC_HOST` is set, the plugin auto-connects (and starts observing) on each
 new session; otherwise call `meshtastic_connect` explicitly.
+
+The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` → systemd's
+`$STATE_DIRECTORY` (writable/persistent under a NixOS service) → `~/.hermes/`.
 
 ## Tools
 

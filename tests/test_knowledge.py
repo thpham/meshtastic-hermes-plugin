@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from meshtastic_hermes.knowledge import BROADCAST_ID, NodeGraph
+from meshtastic_hermes.knowledge import BROADCAST_ID, NodeGraph, default_db_path
 
 
 @pytest.fixture
@@ -105,6 +105,26 @@ def test_interactions_filter_by_node_and_since(kb):
     recent = kb.interactions(since=550.0)
     assert len(recent) == 1
     assert recent[0]["from_node"] == "!y"
+
+
+def test_db_path_prefers_explicit_env(monkeypatch):
+    monkeypatch.setenv("MESHTASTIC_HERMES_DB", "/custom/kb.sqlite")
+    monkeypatch.setenv("STATE_DIRECTORY", "/var/lib/hermes")
+    assert default_db_path() == "/custom/kb.sqlite"
+
+
+def test_db_path_uses_systemd_state_directory(monkeypatch):
+    monkeypatch.delenv("MESHTASTIC_HERMES_DB", raising=False)
+    # systemd may hand over a colon-separated list; first entry wins.
+    monkeypatch.setenv("STATE_DIRECTORY", "/var/lib/hermes:/var/lib/other")
+    assert default_db_path() == "/var/lib/hermes/meshtastic_kb.sqlite"
+
+
+def test_db_path_falls_back_to_home(monkeypatch):
+    monkeypatch.delenv("MESHTASTIC_HERMES_DB", raising=False)
+    monkeypatch.delenv("STATE_DIRECTORY", raising=False)
+    monkeypatch.setenv("HOME", "/home/alice")
+    assert default_db_path() == "/home/alice/.hermes/meshtastic_kb.sqlite"
 
 
 def test_upsert_node_identity_merges_fields(kb):
