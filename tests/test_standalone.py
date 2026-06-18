@@ -43,3 +43,22 @@ def test_list_command(capsys):
     out = capsys.readouterr().out
     assert "meshtastic_connect" in out
     assert "12 tools" in out
+
+
+def test_repl_dispatches_offline_tools(capsys, monkeypatch):
+    # Feed REPL input lines (no host -> no auto-connect), then quit.
+    lines = iter(["meshtastic_kb_summary", "help", "quit"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(lines))
+    rc = main(["repl"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert '"nodes"' in out      # kb_summary ran in-process
+    assert "12 tools" in out     # help listed tools
+
+
+def test_repl_reports_unknown_tool(capsys, monkeypatch):
+    lines = iter(["bogus_tool", "quit"])
+    monkeypatch.setattr("builtins.input", lambda _prompt="": next(lines))
+    rc = main(["repl"])
+    assert rc == 0
+    assert "unknown tool" in capsys.readouterr().out

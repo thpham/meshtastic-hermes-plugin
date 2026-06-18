@@ -134,20 +134,28 @@ schemas, hooks and the real tool handlers all run — then dispatches tools for 
 
 ```bash
 # List everything register() wired up (tools, hooks, commands)
-python -m meshtastic_hermes list            # or: just standalone list
+python -m meshtastic_hermes list                 # or: just standalone list
 
-# Call any tool with optional JSON args (handlers return JSON)
+# Call a single tool with optional JSON args (handlers return JSON).
+# NOTE: each `call` is its own process, so the live connection does NOT persist
+# between calls — `call` is best for the offline meshtastic_kb_* tools.
 python -m meshtastic_hermes call meshtastic_kb_summary
-python -m meshtastic_hermes call meshtastic_send_text '{"text": "hello mesh"}'
 
-# Connect to a node, observe live traffic for N seconds, then dump nodes + KB
+# Interactive shell with a PERSISTENT connection (auto-connects to the host, or
+# MESHTASTIC_HOST). Connect once, then send/read across multiple calls:
+python -m meshtastic_hermes repl 192.168.55.73
+#   meshtastic> meshtastic_send_text {"text": "hello mesh"}
+#   meshtastic> meshtastic_recent_messages {"limit": 5}
+#   meshtastic> quit
+
+# One-shot: connect, observe live traffic for N seconds, dump nodes + KB
 python -m meshtastic_hermes observe 192.168.55.73 30
 ```
 
-`observe` is the quickest end-to-end check against real hardware: it connects, lets the
-receive observer populate the knowledge base, then prints `list_nodes`,
-`recent_messages`, and `kb_summary`. Tools that need a radio return a clear JSON error
-when you're not connected, so `list`/`call` are safe to run anywhere.
+Because the live connection is an in-process singleton, stateful flows (connect → send →
+read) must happen in **one** process — use `repl` (interactive) or `observe` (capture).
+`observe` is the quickest end-to-end check against real hardware. Tools that need a radio
+return a clear JSON error when not connected, so `list`/`call` are safe to run anywhere.
 
 ## CLI
 

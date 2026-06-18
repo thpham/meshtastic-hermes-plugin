@@ -5,17 +5,22 @@ hooks and the real tool handlers are all exercised), then lets you invoke tools
 directly. The ``meshtastic_kb_*`` tools work fully offline; connecting/observing
 needs a reachable Meshtastic node over TCP.
 
+Note: each invocation is a fresh process, so the live connection (an in-process
+singleton) does NOT carry across separate `call` runs. Use `repl` for stateful
+flows (connect once, then send/read), or `observe` for a one-shot capture.
+
 Usage:
     python -m meshtastic_hermes list
     python -m meshtastic_hermes call meshtastic_kb_summary
-    python -m meshtastic_hermes call meshtastic_send_text '{"text": "hi"}'
-    python -m meshtastic_hermes observe 192.168.1.50 30
+    python -m meshtastic_hermes repl 192.168.55.73
+    python -m meshtastic_hermes observe 192.168.55.73 30
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Any
@@ -107,6 +112,51 @@ def _cmd_observe(ctx: FakeContext, args) -> int:
     return 0
 
 
+def _cmd_repl(ctx: FakeContext, args) -> int:
+    def call(name: str, payload: dict | None = None) -> str:
+        return ctx.tools[name]["handler"](payload or {})
+
+    host = args.host or os.environ.get("MESHTASTIC_HOST")
+    if host:
+        print(_pretty(call("meshtastic_connect", {"host": host})))
+
+    print(
+        "Interactive REPL — the connection persists across calls in this one process.\n"
+        "  <tool> [json-args]   e.g.  meshtastic_send_text {\"text\": \"hi\"}\n"
+        "  help | quit",
+        file=sys.stderr,
+    )
+    while True:
+        try:
+            line = input("meshtastic> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not line:
+            continue
+        if line in ("quit", "exit"):
+            break
+        if line in ("help", "?"):
+            _cmd_list(ctx, args)
+            continue
+        name, _, raw = line.partition(" ")
+        if name not in ctx.tools:
+            print(json.dumps({"error": f"unknown tool {name!r}", "available": sorted(ctx.tools)}))
+            continue
+        try:
+            payload = json.loads(raw) if raw.strip() else {}
+        except json.JSONDecodeError as exc:
+            print(json.dumps({"error": f"invalid JSON args: {exc}"}))
+            continue
+        print(_pretty(call(name, payload)))
+
+    try:
+        call("meshtastic_disconnect")
+    except Exception:
+        pass
+    return 0
+
+
 def main(argv=None) -> int:
     ctx = build_registry()
     parser = argparse.ArgumentParser(
@@ -120,9 +170,17 @@ def main(argv=None) -> int:
     p_obs = sub.add_parser("observe", help="Connect to a node, observe traffic, dump nodes/KB")
     p_obs.add_argument("host")
     p_obs.add_argument("seconds", nargs="?", type=int, default=30)
+    p_repl = sub.add_parser("repl", help="Interactive shell with a persistent connection")
+    p_repl.add_argument("host", nargs="?", help="Auto-connect on start (else MESHTASTIC_HOST)")
 
     ns = parser.parse_args(argv)
-    return {"list": _cmd_list, "call": _cmd_call, "observe": _cmd_observe}[ns.cmd](ctx, ns)
+    dispatch = {
+        "list": _cmd_list,
+        "call": _cmd_call,
+        "observe": _cmd_observe,
+        "repl": _cmd_repl,
+    }
+    return dispatch[ns.cmd](ctx, ns)
 
 
 if __name__ == "__main__":
