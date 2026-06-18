@@ -44,6 +44,7 @@ SEND_TEXT = {
             "channel_index": {"type": "integer", "description": "Channel index (default 0 / Primary). For pki sends this is only the routing slot, not the encryption key."},
             "dest_id": {"type": "string", "description": "Destination node id like '!a1b2c3d4'. Omit to broadcast to the channel."},
             "pki": {"type": "boolean", "description": "Encrypt end-to-end to the recipient's public key (requires dest_id). Use for private direct messages."},
+            "want_ack": {"type": "boolean", "description": "Request reliable delivery (firmware retries + ack/nak). Default true; set false for fire-and-forget. The ack is asynchronous and not returned by this call."},
         },
         "required": ["text"],
     },

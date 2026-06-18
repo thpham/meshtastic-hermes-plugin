@@ -188,6 +188,11 @@ PKI requires the recipient's public key to be known to your node (Meshtastic fir
 `pki`) is only channel-PSK encrypted — addressed to one node, but readable by anyone on
 that channel.
 
+**Reliable delivery:** sends request an ack by default (`want_ack=true`), so the firmware
+retries on lossy multi-hop links — important for reaching distant nodes. The ack/nak is
+reported asynchronously by the firmware (as a routing packet), so it isn't returned by the
+send call itself. Pass `want_ack=false` for fire-and-forget.
+
 ## CLI
 
 Outside a chat session:

@@ -79,6 +79,10 @@ def send_text(args: dict) -> str:
     channel_index = int(args.get("channel_index", 0))
     dest_id = args.get("dest_id")
     pki = bool(args.get("pki", False))
+    # Reliable delivery by default: the firmware retries and reports ack/nak. Helps
+    # messages survive lossy multi-hop links. The ack itself arrives asynchronously
+    # (as a routing packet), so it is not reflected in this synchronous result.
+    want_ack = bool(args.get("want_ack", True))
 
     if pki and not dest_id:
         return _err("pki=true requires dest_id — public-key encryption is point-to-point.")
@@ -94,12 +98,13 @@ def send_text(args: dict) -> str:
             destinationId=dest_id,
             portNum=_TEXT_MESSAGE_APP,
             channelIndex=channel_index,
+            wantAck=want_ack,
             pkiEncrypted=True,
         )
     else:
         # Channel-PSK encryption: readable by anyone holding the channel key (and on
         # the default Primary channel that key is public).
-        kwargs: dict[str, Any] = {"channelIndex": channel_index}
+        kwargs: dict[str, Any] = {"channelIndex": channel_index, "wantAck": want_ack}
         if dest_id:
             kwargs["destinationId"] = dest_id
         iface.sendText(text, **kwargs)
@@ -108,6 +113,7 @@ def send_text(args: dict) -> str:
         {
             "sent": True,
             "encryption": "pki" if pki else "channel",
+            "want_ack": want_ack,
             "text": text,
             "channel_index": channel_index,
             "dest_id": dest_id,
