@@ -30,6 +30,10 @@ htmlcov/
 # direnv
 .direnv/
 
+# Nix build output
+result
+result-*
+
 # Editor
 .DS_Store
 *.swp
