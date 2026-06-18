@@ -4,8 +4,63 @@
 
 - A Meshtastic node reachable over TCP/IP (WiFi-enabled ESP32 firmware, or `meshtasticd`).
   Default port is `4403`.
-- Hermes installed, with this plugin linked/installed and **enabled**
-  (`just link && just enable`, or `hermes plugins enable meshtastic`).
+- Hermes installed, with this plugin installed and **enabled**. On desktop:
+  `just link && just enable` (or `hermes plugins enable meshtastic`). On NixOS:
+  declare it in your config (see below) — `hermes plugins enable` is blocked there
+  because `config.yaml` is Nix-generated and `.managed`.
+
+## Deploying on NixOS
+
+Hermes ships a Nix flake with a NixOS module; this plugin ships an overlay. Wire them
+together — `extraPythonPackages` takes the plugin (a list of packages), and
+`settings.plugins.enabled` turns it on:
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    hermes-agent.url = "github:NousResearch/hermes-agent";
+    meshtastic-hermes-plugin.url = "github:thpham/meshtastic-hermes-plugin";
+  };
+
+  outputs = { nixpkgs, hermes-agent, meshtastic-hermes-plugin, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        hermes-agent.nixosModules.default
+        { nixpkgs.overlays = [ meshtastic-hermes-plugin.overlays.default ]; }
+        ./hermes.nix
+      ];
+    };
+  };
+}
+```
+
+```nix
+# hermes.nix
+{ pkgs, ... }:
+{
+  services.hermes-agent = {
+    enable = true;
+
+    # The plugin (meshtastic comes in transitively). The overlay also populates
+    # python312Packages etc. — use the set matching your Hermes build if it pins one.
+    extraPythonPackages = [ pkgs.python3Packages.meshtastic-hermes-plugin ];
+
+    # Turn the plugin on (CLI `hermes plugins enable` is blocked on NixOS).
+    settings.plugins.enabled = [ "meshtastic" ];
+
+    # Auto-connect + observe on session start (non-secret env).
+    environment.MESHTASTIC_HOST = "192.168.1.50";
+    # KB defaults to $HERMES_HOME/meshtastic_kb.sqlite; override if you like:
+    # environment.MESHTASTIC_HERMES_DB = "/var/lib/hermes/meshtastic_kb.sqlite";
+  };
+}
+```
+
+After `nixos-rebuild switch`, the KB persists at `/var/lib/hermes/.hermes/meshtastic_kb.sqlite`
+(next to Hermes' own `config.yaml`).
 
 ## Quick start
 
@@ -82,7 +137,8 @@ hermes meshtastic kb-summary   # KB summary as JSON
 ## Troubleshooting
 
 - **Plugin not listed** — run `just hermes-debug` (`HERMES_PLUGINS_DEBUG=1 hermes plugins
-list`) for verbose discovery logs; ensure it's in `plugins.enabled` in `~/.hermes/config.yaml`.
+list`) for verbose discovery logs; ensure it's enabled — `plugins.enabled` in
+`~/.hermes/config.yaml` (desktop) or `services.hermes-agent.settings.plugins.enabled` (NixOS).
 - **`radio_unavailable` error from a tool** — the `meshtastic` package is missing from
   Hermes' Python environment (happens with bare directory-drop installs). Install it there:
   `pip install meshtastic` (pip-based installs of this package pull it automatically).
