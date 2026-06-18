@@ -251,7 +251,11 @@ def _watch_messages(ctx: FakeContext, seconds: float) -> None:
                 key = (m["ts"], m.get("from"), m.get("text"))
                 if key not in seen:
                     seen.add(key)
-                    print(f"  [{m.get('from')} -> {m.get('to')} ch{m.get('channel')}] {m.get('text')!r}")
+                    to = m.get("to")
+                    # A directed message (to a specific node) is a DM; "^all" is a
+                    # channel broadcast.
+                    kind = "DM" if (to and to != "^all") else f"ch{m.get('channel') or 0}"
+                    print(f"  [{kind}] {m.get('from')}: {m.get('text')!r}")
             time.sleep(1)
     except KeyboardInterrupt:
         pass
