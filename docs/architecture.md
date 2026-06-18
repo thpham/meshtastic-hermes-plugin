@@ -65,6 +65,18 @@ Query methods: `nodes()`, `interactions()`, `neighbors()` (interaction-count gra
 access is lock-guarded because writes come from the radio thread while reads come from the
 tool/main thread.
 
+`default_db_path()` resolves the DB location in priority order so it lands somewhere
+writable in every deployment: `MESHTASTIC_HERMES_DB` (explicit) → `HERMES_HOME` (Hermes'
+own dir, next to its `config.yaml`) → systemd `STATE_DIRECTORY` → `~/.hermes/`.
+
+### `__main__.py` — standalone harness
+
+A radio-and-Hermes-free entry point (`python -m meshtastic_hermes`) for development and
+testing. It registers the plugin through a fake context (`FakeContext`) and exposes
+`list` / `call` / `repl` / `observe` / `bridge`. The `bridge` subcommand simulates the
+gateway loop using the same `gateway_bridge` routing as the real adapter. It is not part
+of the Hermes runtime path.
+
 ## Threading notes
 
 - Radio RX runs on a background thread created by `meshtastic`.

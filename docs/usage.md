@@ -14,9 +14,9 @@
 Hermes ships a Nix flake (NixOS module) and this repo ships an overlay that adds the
 package to your Python set. This one package provides **both** plugins:
 
-| Plugin name (in `plugins.enabled`) | Package      | What it does                                   |
-| ---------------------------------- | ------------ | ---------------------------------------------- |
-| `meshtastic`                       | the tools/KB plugin | 12 tools, knowledge base, slash + CLI commands |
+| Plugin name (in `plugins.enabled`) | Package             | What it does                                                       |
+| ---------------------------------- | ------------------- | ------------------------------------------------------------------ |
+| `meshtastic`                       | the tools/KB plugin | 12 tools, knowledge base, slash + CLI commands                     |
 | `meshtastic-platform`              | the gateway adapter | inbound mesh text drives the agent; replies go back over the radio |
 
 Enable either or both. They cooperate over one radio connection (a process-wide
@@ -110,17 +110,17 @@ needed. Someone messages your node and the agent answers:
 
 **Reply policy** (env on the service):
 
-| Env | Effect |
-| --- | --- |
-| _unset_ | DMs only (default) — safest, no channel noise |
+| Env                                        | Effect                                                                         |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| _unset_                                    | DMs only (default) — safest, no channel noise                                  |
 | `MESHTASTIC_REPLY_CHANNELS="1"` or `"1,2"` | DMs + those channel indices (your private channels; public Primary/0 excluded) |
-| `MESHTASTIC_REPLY_ALL="true"` | DMs + every channel (incl. public Primary — use with care) |
+| `MESHTASTIC_REPLY_ALL="true"`              | DMs + every channel (incl. public Primary — use with care)                     |
 
 **Before deploying, validate the exact behavior locally** with the bridge simulator (no
 Hermes, no transmit) — see [Simulate the gateway loop](#standalone-testing-without-hermes)
 below. It uses the same routing/policy code as the adapter.
 
-**Reachability caveat:** the agent only answers messages it actually *receives*. A peer's
+**Reachability caveat:** the agent only answers messages it actually _receives_. A peer's
 message must be addressed to your connected node and survive the RF path — multi-hop DMs on
 weak links are frequently lost, so an unanswered message is usually packet loss, not a bug.
 
@@ -236,14 +236,14 @@ The `bridge` simulator prints a line per matched message and exits after the win
 
 Its reply comes from a stub `simulate_reply()` (echo) — replace it with an LLM/webhook to
 prototype an autonomous bot. The real Hermes adapter uses the agent/LLM instead. Only
-messages addressed to your connected node and decryptable are matched; DMs you send *to
-other* nodes are encrypted to them and never appear here.
+messages addressed to your connected node and decryptable are matched; DMs you send _to
+other_ nodes are encrypted to them and never appear here.
 
 The `repl` supports arrow-key history (↑/↓), inline line editing and Ctrl-R search, and
 persists history across sessions in `~/.meshtastic_hermes_history`.
 
 `recent` reads an **in-memory, per-process** buffer — it only holds text received during
-the *current* connection (it's never persisted; only metadata goes to the KB). To catch a
+the _current_ connection (it's never persisted; only metadata goes to the KB). To catch a
 reply to a `dm`, use **`watch`** in the same session: it prints incoming messages live as
 they arrive. Note that replies can still be lost to RF (multi-hop / low SNR) and won't show
 if they never reach your node.
@@ -261,12 +261,12 @@ These are not the same privacy level:
   key**. On the default Primary channel the key is public, so anyone can read it — treat
   channel sends as non-private.
 - **`dm <node_id> <text>`** uses **end-to-end public-key encryption** (Curve25519) to that
-  node only — it is *not* sent in clear on a public channel. This maps to
+  node only — it is _not_ sent in clear on a public channel. This maps to
   `meshtastic_send_text` with `pki=true`, which goes through the firmware's PKI path
   (`sendData(pkiEncrypted=True)`), so the channel is just a routing slot.
 
 PKI requires the recipient's public key to be known to your node (Meshtastic firmware
-2.5+). A directed message *without* `pki` (`meshtastic_send_text` with `dest_id` but no
+2.5+). A directed message _without_ `pki` (`meshtastic_send_text` with `dest_id` but no
 `pki`) is only channel-PSK encrypted — addressed to one node, but readable by anyone on
 that channel.
 
@@ -294,7 +294,7 @@ hermes meshtastic kb-summary   # KB summary as JSON
 
 - **Plugin not listed** — run `just hermes-debug` (`HERMES_PLUGINS_DEBUG=1 hermes plugins
 list`) for verbose discovery logs; ensure it's enabled — `plugins.enabled` in
-`~/.hermes/config.yaml` (desktop) or `services.hermes-agent.settings.plugins.enabled` (NixOS).
+  `~/.hermes/config.yaml` (desktop) or `services.hermes-agent.settings.plugins.enabled` (NixOS).
 - **`radio_unavailable` error from a tool** — the `meshtastic` package is missing from
   Hermes' Python environment (happens with bare directory-drop installs). Install it there:
   `pip install meshtastic` (pip-based installs of this package pull it automatically).

@@ -70,7 +70,7 @@ crashing.)
 This plugin ships the `hermes_agent.plugins` entry point, so it plugs into Hermes'
 [`extraPythonPackages`](https://hermes-agent.nousresearch.com/docs/getting-started/nix-setup/)
 option (a list of packages). The flake's **overlay** injects `meshtastic-hermes-plugin`
-into the Python package set so it builds against the *same* Python your Hermes service
+into the Python package set so it builds against the _same_ Python your Hermes service
 uses (the overlay populates `python311Packages`, `python312Packages`, … via
 `pythonPackagesExtensions` — pick the set matching your Hermes build):
 
@@ -135,9 +135,9 @@ hermes plugins enable meshtastic  # plugins are disabled by default
 
 Two optional environment variables (prompted during `hermes plugins install`):
 
-| Variable               | Purpose                                            | Default                          |
-| ---------------------- | -------------------------------------------------- | -------------------------------- |
-| `MESHTASTIC_HOST`      | Node host/IP for TCP auto-connect on session start | _unset_ (no auto-connect)        |
+| Variable               | Purpose                                            | Default                                                                                             |
+| ---------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `MESHTASTIC_HOST`      | Node host/IP for TCP auto-connect on session start | _unset_ (no auto-connect)                                                                           |
 | `MESHTASTIC_HERMES_DB` | SQLite knowledge-base path                         | `$HERMES_HOME/meshtastic_kb.sqlite` (next to Hermes' config), else `~/.hermes/meshtastic_kb.sqlite` |
 
 When `MESHTASTIC_HOST` is set, the plugin auto-connects (and starts observing) on each
@@ -149,20 +149,20 @@ The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` → `$HERMES_H
 
 ## Tools
 
-| Tool                         | Description                                                       |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `meshtastic_connect`         | Open TCP link to a node (uses `MESHTASTIC_HOST` if no host given) |
-| `meshtastic_disconnect`      | Close the link, stop observing                                    |
+| Tool                         | Description                                                                                    |
+| ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `meshtastic_connect`         | Open TCP link to a node (uses `MESHTASTIC_HOST` if no host given)                              |
+| `meshtastic_disconnect`      | Close the link, stop observing                                                                 |
 | `meshtastic_send_text`       | Send text: broadcast (channel-PSK), or private DM to a node (`dest_id` + `pki` for end-to-end) |
-| `meshtastic_recent_messages` | Recently decoded TEXT messages (never encrypted content)          |
-| `meshtastic_list_nodes`      | Nodes from the live radio DB                                      |
-| `meshtastic_node_info`       | Detail for one node (local node if omitted)                       |
-| `meshtastic_list_channels`   | Configured channels (index, name, role — no PSK secrets)          |
-| `meshtastic_device_metrics`  | Local battery, voltage, utilization, uptime, position             |
-| `meshtastic_kb_summary`      | KB overview: nodes, packet counts, channels, top talkers          |
-| `meshtastic_kb_nodes`        | Recorded nodes with first/last seen, counts, signal               |
-| `meshtastic_kb_interactions` | Observed interaction metadata (filterable by node / time)         |
-| `meshtastic_kb_neighbors`    | Inferred direct contacts of a node, ranked by interaction count   |
+| `meshtastic_recent_messages` | Recently decoded TEXT messages (never encrypted content)                                       |
+| `meshtastic_list_nodes`      | Nodes from the live radio DB                                                                   |
+| `meshtastic_node_info`       | Detail for one node (local node if omitted)                                                    |
+| `meshtastic_list_channels`   | Configured channels (index, name, role — no PSK secrets)                                       |
+| `meshtastic_device_metrics`  | Local battery, voltage, utilization, uptime, position                                          |
+| `meshtastic_kb_summary`      | KB overview: nodes, packet counts, channels, top talkers                                       |
+| `meshtastic_kb_nodes`        | Recorded nodes with first/last seen, counts, signal                                            |
+| `meshtastic_kb_interactions` | Observed interaction metadata (filterable by node / time)                                      |
+| `meshtastic_kb_neighbors`    | Inferred direct contacts of a node, ranked by interaction count                                |
 
 It also registers a `/meshtastic` slash command (status + KB summary) and a
 `hermes meshtastic <status|kb-summary>` CLI command.
@@ -186,7 +186,7 @@ connection/observer/KB code.
 
 ### Enable the gateway on NixOS
 
-It's a *separate* plugin from the tools plugin, so enable it by its own name and configure
+It's a _separate_ plugin from the tools plugin, so enable it by its own name and configure
 it via the service environment:
 
 ```nix
