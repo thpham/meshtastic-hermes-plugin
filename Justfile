@@ -26,6 +26,16 @@ unlink:
     rm -f "{{hermes_plugins}}/{{plugin_name}}"
     @echo "Unlinked {{hermes_plugins}}/{{plugin_name}}"
 
+# Symlink the platform adapter plugin (kind: platform) into ~/.hermes/plugins.
+link-platform:
+    mkdir -p "{{hermes_plugins}}"
+    ln -sfn "{{justfile_directory()}}/meshtastic_platform" "{{hermes_plugins}}/meshtastic-platform"
+    @echo "Linked meshtastic_platform -> {{hermes_plugins}}/meshtastic-platform"
+
+# Remove the platform adapter symlink.
+unlink-platform:
+    rm -f "{{hermes_plugins}}/meshtastic-platform"
+
 # Add the plugin to the Hermes enabled allow-list.
 enable:
     hermes plugins enable {{plugin_name}}

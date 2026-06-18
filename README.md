@@ -150,6 +150,35 @@ The KB path is resolved in priority order: `MESHTASTIC_HERMES_DB` → `$HERMES_H
 It also registers a `/meshtastic` slash command (status + KB summary) and a
 `hermes meshtastic <status|kb-summary>` CLI command.
 
+## Bidirectional gateway (Hermes platform adapter)
+
+Beyond the tools plugin, this repo ships a **platform adapter** (`kind: platform`,
+package `meshtastic_platform`) that turns the mesh into a first-class Hermes gateway
+channel: inbound mesh text **drives the agent**, and the agent's replies are sent back
+over the radio. It mirrors Hermes' bundled adapters (e.g. IRC) and reuses this repo's
+connection/observer/KB code.
+
+- **Reply policy:** direct messages only by default (avoids channel spam and bot loops);
+  set `MESHTASTIC_REPLY_ALL=true` to also answer channel messages.
+- **Encryption:** replies to a DM go out **end-to-end (PKI)** to the sender; channel
+  replies use the channel key. Opaque/undecryptable traffic is never answered.
+- **Enable on NixOS:** add `meshtastic-platform` to `services.hermes-agent.settings.plugins.enabled`
+  (and `extraPythonPackages`), or `just link-platform` for local dev.
+
+The inbound→reply routing lives in [gateway_bridge.py](meshtastic_hermes/gateway_bridge.py)
+(pure + unit-tested) so it's shared by the adapter and a **REPL simulator** you can run
+without Hermes:
+
+```bash
+# Watch inbound DMs and print the reply the agent WOULD send (no transmit):
+python -m meshtastic_hermes bridge 192.168.55.73        # or: just standalone bridge ...
+# Actually transmit replies (echo responder), or include channel messages:
+python -m meshtastic_hermes bridge 192.168.55.73 --send --all
+```
+
+The simulator's `simulate_reply()` is a stub echo — swap it for an LLM/webhook to
+prototype an autonomous mesh bot before wiring up the full Hermes adapter.
+
 ## Development
 
 ```bash

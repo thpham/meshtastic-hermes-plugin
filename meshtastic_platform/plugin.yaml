@@ -1,0 +1,25 @@
+name: meshtastic-platform
+label: Meshtastic
+kind: platform
+version: "0.1.0"
+description: >-
+  Meshtastic LoRa mesh gateway adapter for Hermes Agent. Relays inbound mesh text
+  messages to the agent and sends the agent's replies back over the radio. Direct
+  messages are end-to-end (PKI) encrypted; replies default to direct messages only.
+author: Thomas Pham
+
+requires_env:
+  - name: MESHTASTIC_HOST
+    description: "Meshtastic node host/IP to connect to over TCP (e.g. 192.168.55.73)."
+    prompt: "Meshtastic node host/IP"
+    password: false
+
+optional_env:
+  - name: MESHTASTIC_REPLY_ALL
+    description: "Reply to channel messages too, not just direct messages (1/true/yes). Default: DMs only."
+    prompt: "Reply to all channel messages? (true/false)"
+    password: false
+  - name: MESHTASTIC_HERMES_DB
+    description: "Path to the node-interaction knowledge-base SQLite file (defaults under $HERMES_HOME)."
+    prompt: "Knowledge-base DB path (or empty)"
+    password: false

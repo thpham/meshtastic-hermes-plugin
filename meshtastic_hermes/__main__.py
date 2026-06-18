@@ -286,6 +286,86 @@ def _cmd_repl(ctx: FakeContext, args) -> int:
     return 0
 
 
+def simulate_reply(text: str, inbound: dict) -> str:
+    """Stand-in for the agent/LLM in the simulator. In the Hermes platform adapter
+    the gateway/LLM produces the reply; here we just echo so the loop is visible.
+    Swap this for any callable (an LLM client, a webhook) to prototype a real bot."""
+    return f"ack: {text[:120]}"
+
+
+def _cmd_bridge(ctx: FakeContext, args) -> int:
+    """Simulate the Hermes platform adapter loop: inbound mesh text -> responder ->
+    reply, using the same gateway_bridge routing the real adapter uses.
+
+    Dry-run by default (prints the reply it WOULD send); pass --send to transmit.
+    """
+    from . import gateway_bridge as gb
+    from .connection import get_manager
+
+    try:
+        from pubsub import pub
+    except ImportError:
+        print(json.dumps({"error": "meshtastic radio stack not installed"}))
+        return 1
+
+    host = args.host or os.environ.get("MESHTASTIC_HOST")
+    if not host:
+        print(json.dumps({"error": "no host given and MESHTASTIC_HOST is not set"}))
+        return 1
+
+    mgr = get_manager()
+    print(_pretty(json.dumps(mgr.connect(host))))
+    my = mgr.my_node_id()
+    dms_only = not args.all
+
+    def on_rx(packet, interface=None):
+        try:
+            result = gb.process_inbound(packet, my, simulate_reply, dms_only=dms_only)
+        except Exception:
+            return
+        if result is None:
+            return
+        inb = result["inbound"]
+        tag = "DM" if inb["is_dm"] else f"ch{inb['channel']}"
+        if result["action"] == "skip":
+            print(f"[skip {tag}] {inb['from_id']}: {inb['text']!r}")
+            return
+        print(f"[inbound {tag}] {inb['from_id']}: {inb['text']!r}")
+        print(f"  -> reply to {result['chat_id']}: {result['reply']!r}")
+        if args.send:
+            tgt = result["target"]
+            res = ctx.tools["meshtastic_send_text"]["handler"](
+                {
+                    "text": result["reply"],
+                    "dest_id": tgt["dest_id"],
+                    "channel_index": tgt["channel_index"],
+                    "pki": tgt["pki"],
+                }
+            )
+            print(f"  sent: {_pretty(res)}")
+        else:
+            print("  (dry-run — pass --send to actually transmit)")
+
+    pub.subscribe(on_rx, "meshtastic.receive")
+    mode = "SEND" if args.send else "DRY-RUN"
+    scope = "all messages" if args.all else "DMs only"
+    print(
+        f"Bridge simulator [{mode}, {scope}], local node {my}. "
+        f"Running {int(args.seconds)}s (Ctrl-C to stop)...",
+        file=sys.stderr,
+    )
+    try:
+        time.sleep(args.seconds)
+    except KeyboardInterrupt:
+        pass
+    try:
+        pub.unsubscribe(on_rx, "meshtastic.receive")
+    except Exception:
+        pass
+    mgr.disconnect()
+    return 0
+
+
 def main(argv=None) -> int:
     ctx = build_registry()
     parser = argparse.ArgumentParser(
@@ -301,6 +381,13 @@ def main(argv=None) -> int:
     p_obs.add_argument("seconds", nargs="?", type=int, default=30)
     p_repl = sub.add_parser("repl", help="Interactive shell with a persistent connection")
     p_repl.add_argument("host", nargs="?", help="Auto-connect on start (else MESHTASTIC_HOST)")
+    p_bridge = sub.add_parser(
+        "bridge", help="Simulate the Hermes platform adapter loop (inbound -> reply)"
+    )
+    p_bridge.add_argument("host", nargs="?", help="Node host (else MESHTASTIC_HOST)")
+    p_bridge.add_argument("seconds", nargs="?", type=int, default=300)
+    p_bridge.add_argument("--send", action="store_true", help="Actually transmit replies")
+    p_bridge.add_argument("--all", action="store_true", help="Reply to channel messages too, not just DMs")
 
     ns = parser.parse_args(argv)
     dispatch = {
@@ -308,6 +395,7 @@ def main(argv=None) -> int:
         "call": _cmd_call,
         "observe": _cmd_observe,
         "repl": _cmd_repl,
+        "bridge": _cmd_bridge,
     }
     return dispatch[ns.cmd](ctx, ns)
 

@@ -26,16 +26,19 @@ dependencies = [
 dev = ["pytest>=7.0", "ruff>=0.4"]
 
 # Hermes discovers pip-installed plugins via this entry point group.
-# The plugin's registration lives in meshtastic_hermes/__init__.py:register(ctx).
+# - meshtastic_hermes: the tools/KB plugin (register lives in its __init__).
+# - meshtastic_platform: the platform adapter (kind: platform) — bidirectional gateway.
 [project.entry-points."hermes_agent.plugins"]
 meshtastic = "meshtastic_hermes"
+meshtastic-platform = "meshtastic_platform"
 
 [tool.setuptools]
-packages = ["meshtastic_hermes"]
+packages = ["meshtastic_hermes", "meshtastic_platform"]
 
 [tool.setuptools.package-data]
-# Ship the manifest so the package directory also works as a drop-in plugin dir.
+# Ship the manifests so the package directories also work as drop-in plugin dirs.
 meshtastic_hermes = ["plugin.yaml"]
+meshtastic_platform = ["plugin.yaml"]
 
 [tool.ruff]
 line-length = 100

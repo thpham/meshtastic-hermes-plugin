@@ -72,6 +72,22 @@ tool/main thread.
 - Shared state (`NodeGraph`, the recent-message deque, the interface handle) is guarded by
   locks. `deque(maxlen=...)` bounds memory for the recent-message buffer.
 
+## Gateway adapter (`meshtastic_platform`)
+
+A second, separate plugin (`kind: platform`) makes the mesh a bidirectional Hermes
+gateway. `meshtastic_platform/adapter.py` subclasses `BasePlatformAdapter`:
+
+- **Inbound:** the radio RX thread's pubsub callback (`_on_rx`) normalizes a packet via
+  `gateway_bridge.inbound_from_packet`, applies the reply policy, then crosses the
+  thread→event-loop boundary with `asyncio.run_coroutine_threadsafe(self._dispatch(...))`.
+  `_dispatch` builds a `MessageEvent` and calls `self.handle_message(event)`; the base
+  routes it to the agent and calls `send()` with the reply.
+- **Outbound:** `send(chat_id, content)` maps the `chat_id` back to radio params via
+  `gateway_bridge.outbound_target` and reuses `tools.send_text` (run in an executor).
+- **Decoupling:** all routing/policy lives in `gateway_bridge.py` (pure, unit-tested), so
+  the same logic backs the REPL simulator (`python -m meshtastic_hermes bridge`). The
+  `gateway.*` imports are lazy/guarded, so the module loads (as a no-op) outside Hermes.
+
 ## Dependency handling
 
 `meshtastic` is a hard dependency in `pyproject.toml`, so any pip-based install pulls it
