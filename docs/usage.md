@@ -156,6 +156,9 @@ python -m meshtastic_hermes repl 192.168.55.73
 python -m meshtastic_hermes observe 192.168.55.73 30
 ```
 
+The `repl` supports arrow-key history (↑/↓), inline line editing and Ctrl-R search, and
+persists history across sessions in `~/.meshtastic_hermes_history`.
+
 Because the live connection is an in-process singleton, stateful flows (connect → send →
 read) must happen in **one** process — use `repl` (interactive) or `observe` (capture).
 `observe` is the quickest end-to-end check against real hardware. Tools that need a radio

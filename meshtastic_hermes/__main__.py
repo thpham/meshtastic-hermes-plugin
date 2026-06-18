@@ -189,14 +189,38 @@ def repl_command(ctx: FakeContext, line: str) -> str:
     return call(name, payload)
 
 
+def _enable_readline():
+    """Enable arrow-key history + line editing for the REPL (best-effort).
+
+    Importing `readline` is enough to give `input()` up/down history, left/right
+    editing and Ctrl-R search. We also persist history across sessions. Skipped for
+    non-interactive stdin (pipes/tests) and on platforms without readline.
+    """
+    if not sys.stdin.isatty():
+        return None, None
+    try:
+        import readline
+    except ImportError:
+        return None, None
+    histfile = os.path.expanduser("~/.meshtastic_hermes_history")
+    try:
+        readline.read_history_file(histfile)
+    except OSError:
+        pass  # no history yet, or unreadable
+    readline.set_history_length(1000)
+    return readline, histfile
+
+
 def _cmd_repl(ctx: FakeContext, args) -> int:
+    readline, histfile = _enable_readline()
+
     host = args.host or os.environ.get("MESHTASTIC_HOST")
     if host:
         print(_pretty(ctx.tools["meshtastic_connect"]["handler"]({"host": host})))
 
     print(
         "Interactive REPL — connection persists across commands in this process.\n"
-        "Type 'help' for friendly commands, or call any tool raw. 'quit' to exit.",
+        "Arrow keys recall history. Type 'help' for commands, 'quit' to exit.",
         file=sys.stderr,
     )
     while True:
@@ -216,6 +240,12 @@ def _cmd_repl(ctx: FakeContext, args) -> int:
             _cmd_list(ctx, args)
             continue
         print(repl_command(ctx, line))
+
+    if readline and histfile:
+        try:
+            readline.write_history_file(histfile)
+        except OSError:
+            pass
 
     try:
         ctx.tools["meshtastic_disconnect"]["handler"]({})
