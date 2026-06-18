@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meshtastic-hermes-plugin"
+version = "0.1.0"
+description = "Hermes Agent plugin to interact with a Meshtastic mesh over TCP/IP and build a node-interaction knowledge base"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Thomas Pham" }]
+keywords = ["meshtastic", "hermes", "hermes-agent", "lora", "mesh", "plugin"]
+
+# `meshtastic` is a hard dependency so any pip-based install (pip install .,
+# pip install meshtastic-hermes-plugin, or `hermes plugins install` when it pip-
+# installs the package) pulls it automatically into Hermes' Python environment.
+# Tool handlers still import-guard it so a bare directory-drop (no pip step) loads
+# and degrades gracefully instead of crashing.
+dependencies = [
+  "PyYAML>=6.0",
+  "meshtastic>=2.7.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ruff>=0.4"]
+
+# Hermes discovers pip-installed plugins via this entry point group.
+# The plugin's registration lives in meshtastic_hermes/__init__.py:register(ctx).
+[project.entry-points."hermes_agent.plugins"]
+meshtastic = "meshtastic_hermes"
+
+[tool.setuptools]
+packages = ["meshtastic_hermes"]
+
+[tool.setuptools.package-data]
+# Ship the manifest so the package directory also works as a drop-in plugin dir.
+meshtastic_hermes = ["plugin.yaml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

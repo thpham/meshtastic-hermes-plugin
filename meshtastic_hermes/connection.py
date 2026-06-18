@@ -1,0 +1,131 @@
+"""Stateful connection manager for the Meshtastic TCP interface.
+
+Hermes tool handlers are stateless functions, but a Meshtastic link is a
+long-lived object with a background receive thread. This module owns a single
+process-wide connection plus the observer that feeds the knowledge base.
+
+`meshtastic` is a declared (hard) dependency, normally installed automatically by
+pip. It is still imported lazily inside `connect()` so a bare directory-drop
+install (no pip step) can load — and its KB-query tools can run — even when the
+radio stack happens to be missing.
+"""
+
+from __future__ import annotations
+
+import threading
+from typing import Any
+
+DEFAULT_TCP_PORT = 4403
+
+
+class MeshtasticUnavailable(RuntimeError):
+    """Raised when the optional `meshtastic` package is not importable."""
+
+
+def _import_meshtastic():
+    try:
+        import meshtastic  # noqa: F401
+        import meshtastic.tcp_interface  # noqa: F401
+
+        return meshtastic
+    except ImportError as exc:  # pragma: no cover - exercised only without extra
+        raise MeshtasticUnavailable(
+            "The 'meshtastic' package is not installed in Hermes' Python environment. "
+            "Install it with: pip install meshtastic  "
+            "(normally pulled in automatically by pip install meshtastic-hermes-plugin)."
+        ) from exc
+
+
+class ConnectionManager:
+    """Owns the active TCPInterface and wires the receive observer."""
+
+    def __init__(self) -> None:
+        self._iface: Any = None
+        self._host: str | None = None
+        self._lock = threading.Lock()
+        self._observer = None  # set lazily to avoid import cycle
+
+    # ------------------------------------------------------------------
+
+    def connect(self, host: str, port: int = DEFAULT_TCP_PORT) -> dict[str, Any]:
+        """Open a TCP connection to `host` and subscribe the observer.
+
+        Idempotent-ish: an existing connection is closed first.
+        """
+        mesh = _import_meshtastic()
+        from pubsub import pub
+
+        from . import observer as _observer
+
+        with self._lock:
+            if self._iface is not None:
+                self._close_locked()
+
+            iface = mesh.tcp_interface.TCPInterface(host, portNumber=port)
+            self._iface = iface
+            self._host = host
+
+            # Subscribe to the parent topic to capture ALL packet types,
+            # including encrypted PRIVATE_APP traffic on channels we cannot read.
+            self._observer = _observer.get_observer()
+            pub.subscribe(self._observer.on_receive, "meshtastic.receive")
+
+        return self.status()
+
+    def disconnect(self) -> dict[str, Any]:
+        with self._lock:
+            self._close_locked()
+        return {"connected": False}
+
+    def _close_locked(self) -> None:
+        if self._observer is not None:
+            try:
+                from pubsub import pub
+
+                pub.unsubscribe(self._observer.on_receive, "meshtastic.receive")
+            except Exception:
+                pass
+        if self._iface is not None:
+            try:
+                self._iface.close()
+            except Exception:
+                pass
+        self._iface = None
+        self._host = None
+
+    # ------------------------------------------------------------------
+
+    def is_connected(self) -> bool:
+        return self._iface is not None
+
+    @property
+    def iface(self) -> Any:
+        if self._iface is None:
+            raise RuntimeError("Not connected. Call meshtastic_connect first.")
+        return self._iface
+
+    def my_node_id(self) -> str | None:
+        if self._iface is None:
+            return None
+        info = getattr(self._iface, "myInfo", None)
+        if info is None:
+            return None
+        return f"!{info.my_node_num:08x}"
+
+    def status(self) -> dict[str, Any]:
+        return {
+            "connected": self.is_connected(),
+            "host": self._host,
+            "node_id": self.my_node_id(),
+        }
+
+
+# Process-wide singleton.
+_MANAGER: ConnectionManager | None = None
+
+
+def get_manager() -> ConnectionManager:
+    global _MANAGER
+    if _MANAGER is None:
+        _MANAGER = ConnectionManager()
+    return _MANAGER

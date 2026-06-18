@@ -1,0 +1,34 @@
+name: meshtastic
+version: "0.1.0"
+description: >-
+  Interact with a Meshtastic LoRa mesh over TCP/IP — send messages, inspect
+  nodes/channels, and build a persistent node-interaction knowledge base from
+  observed traffic metadata (no payload decryption).
+author: Thomas Pham
+
+provides_tools:
+  - meshtastic_connect
+  - meshtastic_disconnect
+  - meshtastic_send_text
+  - meshtastic_recent_messages
+  - meshtastic_list_nodes
+  - meshtastic_node_info
+  - meshtastic_list_channels
+  - meshtastic_device_metrics
+  - meshtastic_kb_summary
+  - meshtastic_kb_nodes
+  - meshtastic_kb_interactions
+  - meshtastic_kb_neighbors
+
+provides_hooks:
+  - on_session_start
+  - on_session_end
+
+# Optional environment variables (prompted during `hermes plugins install`).
+requires_env:
+  - name: MESHTASTIC_HOST
+    description: "Default Meshtastic node host/IP for TCP auto-connect (e.g. 192.168.1.50). Optional."
+    secret: false
+  - name: MESHTASTIC_HERMES_DB
+    description: "Path to the SQLite knowledge-base file. Defaults to ~/.hermes/meshtastic_kb.sqlite. Optional."
+    secret: false
