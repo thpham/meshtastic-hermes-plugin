@@ -52,7 +52,7 @@ together — `extraPythonPackages` takes the plugin (a list of packages), and
     settings.plugins.enabled = [ "meshtastic" ];
 
     # Auto-connect + observe on session start (non-secret env).
-    environment.MESHTASTIC_HOST = "192.168.1.50";
+    environment.MESHTASTIC_HOST = "192.168.55.73";
     # KB defaults to $HERMES_HOME/meshtastic_kb.sqlite; override if you like:
     # environment.MESHTASTIC_HERMES_DB = "/var/lib/hermes/meshtastic_kb.sqlite";
   };
@@ -67,7 +67,7 @@ After `nixos-rebuild switch`, the KB persists at `/var/lib/hermes/.hermes/meshta
 1. **Optionally** set a default node so the plugin auto-connects each session:
 
    ```bash
-   export MESHTASTIC_HOST=192.168.1.50
+   export MESHTASTIC_HOST=192.168.55.73
    ```
 
 2. Start Hermes and confirm the plugin loaded:
@@ -93,7 +93,7 @@ If `MESHTASTIC_HOST` is unset, ask the agent to connect with a host, which calls
 ```json
 {
   "name": "meshtastic_connect",
-  "arguments": { "host": "192.168.1.50", "port": 4403 }
+  "arguments": { "host": "192.168.55.73", "port": 4403 }
 }
 ```
 
@@ -141,7 +141,7 @@ python -m meshtastic_hermes call meshtastic_kb_summary
 python -m meshtastic_hermes call meshtastic_send_text '{"text": "hello mesh"}'
 
 # Connect to a node, observe live traffic for N seconds, then dump nodes + KB
-python -m meshtastic_hermes observe 192.168.1.50 30
+python -m meshtastic_hermes observe 192.168.55.73 30
 ```
 
 `observe` is the quickest end-to-end check against real hardware: it connects, lets the

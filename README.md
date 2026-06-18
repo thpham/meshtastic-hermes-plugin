@@ -74,7 +74,7 @@ uses (the overlay populates `python311Packages`, `python312Packages`, … via
     settings.plugins.enabled = [ "meshtastic" ];
 
     # Optional: auto-connect on session start (non-secret env).
-    environment.MESHTASTIC_HOST = "192.168.1.50";
+    environment.MESHTASTIC_HOST = "192.168.55.73";
   };
 }
 ```
