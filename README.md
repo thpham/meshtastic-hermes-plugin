@@ -17,20 +17,37 @@ It provides three groups of tools:
 > never read or stored. Only TEXT messages we can already decode (on channels the radio
 > holds keys for) are surfaced via `meshtastic_recent_messages`.
 
+It also ships a **bidirectional gateway** (Hermes platform adapter) so inbound mesh
+messages can drive the agent and its replies go back out over the radio — see
+[Bidirectional gateway](#bidirectional-gateway-hermes-platform-adapter).
+
 ## How it fits Hermes
 
-Per the [plugin guide](https://hermes-agent.nousresearch.com/docs/guides/build-a-hermes-plugin),
-this is a standard Python plugin:
+Per the [plugin guides](https://hermes-agent.nousresearch.com/docs/guides/build-a-hermes-plugin),
+this repo ships **two** Hermes plugins:
+
+1. `meshtastic` (`meshtastic_hermes/`) — a tools/hooks plugin: the 12 tools, the
+   knowledge base, the `/meshtastic` slash command and CLI.
+2. `meshtastic-platform` (`meshtastic_platform/`) — a `kind: platform` **gateway
+   adapter** so the mesh can drive the agent bidirectionally (see
+   [Bidirectional gateway](#bidirectional-gateway-hermes-platform-adapter)).
 
 ```
-meshtastic_hermes/
-├── plugin.yaml      # manifest (name: meshtastic)
-├── __init__.py      # register(ctx) — wires tools, hooks, slash + CLI commands
-├── schemas.py       # tool schemas (what the LLM sees)
-├── tools.py         # tool handlers (return JSON strings, never raise)
-├── connection.py    # ConnectionManager singleton (TCPInterface + pubsub)
-├── observer.py      # receive handler → knowledge base + recent-text buffer
-└── knowledge.py     # NodeGraph: SQLite store of nodes + interactions
+meshtastic_hermes/        # tools plugin (name: meshtastic)
+├── plugin.yaml           # manifest
+├── __init__.py           # register(ctx) — wires tools, hooks, slash + CLI commands
+├── schemas.py            # tool schemas (what the LLM sees)
+├── tools.py              # tool handlers (return JSON strings, never raise)
+├── connection.py         # ConnectionManager singleton (TCPInterface + pubsub)
+├── observer.py           # receive handler → knowledge base + recent-text buffer
+├── knowledge.py          # NodeGraph: SQLite store of nodes + interactions
+├── gateway_bridge.py     # pure inbound/outbound mapping + reply policy (shared)
+└── __main__.py           # standalone harness: list/call/repl/observe/bridge
+
+meshtastic_platform/      # gateway adapter plugin (kind: platform)
+├── plugin.yaml           # manifest (kind: platform)
+├── __init__.py           # register(ctx) → ctx.register_platform(...)
+└── adapter.py            # MeshtasticAdapter(BasePlatformAdapter)
 ```
 
 The `meshtastic` radio library is a **hard dependency**, so any pip-based install pulls
@@ -164,12 +181,37 @@ connection/observer/KB code.
   for every channel.
 - **Encryption:** replies to a DM go out **end-to-end (PKI)** to the sender; channel
   replies use the channel key. Opaque/undecryptable traffic is never answered.
-- **Enable on NixOS:** add `meshtastic-platform` to `services.hermes-agent.settings.plugins.enabled`
-  (and `extraPythonPackages`), or `just link-platform` for local dev.
+- **Reachability:** the adapter only sees messages addressed to the node it's connected
+  to, that actually arrive over the air — multi-hop DMs are often lost on lossy links.
+
+### Enable the gateway on NixOS
+
+It's a *separate* plugin from the tools plugin, so enable it by its own name and configure
+it via the service environment:
+
+```nix
+{ pkgs, ... }:
+{
+  nixpkgs.overlays = [ inputs.meshtastic-hermes-plugin.overlays.default ];
+  services.hermes-agent = {
+    enable = true;
+    extraPythonPackages = [ pkgs.python3Packages.meshtastic-hermes-plugin ];
+    # Enable the tools plugin and/or the gateway adapter (both come from this package):
+    settings.plugins.enabled = [ "meshtastic" "meshtastic-platform" ];
+
+    environment.MESHTASTIC_HOST = "192.168.55.73";   # node to connect to
+    environment.MESHTASTIC_REPLY_CHANNELS = "1";     # DMs + channel 1 (omit for DMs only)
+    # environment.MESHTASTIC_REPLY_ALL = "true";     # or: reply on every channel
+  };
+}
+```
+
+For local dev: `just link-platform` then add `meshtastic-platform` to `plugins.enabled`.
+
+### Simulate the loop without Hermes
 
 The inbound→reply routing lives in [gateway_bridge.py](meshtastic_hermes/gateway_bridge.py)
-(pure + unit-tested) so it's shared by the adapter and a **REPL simulator** you can run
-without Hermes:
+(pure + unit-tested) so it's shared by the adapter and a **REPL simulator**:
 
 ```bash
 # Watch inbound DMs and print the reply the agent WOULD send (no transmit):
@@ -180,8 +222,16 @@ python -m meshtastic_hermes bridge 192.168.55.73 --channels 1 --send
 python -m meshtastic_hermes bridge 192.168.55.73 --all
 ```
 
+It prints a line per matched message, e.g.:
+
+```
+[inbound DM] !a696579c: 'hello tom'
+  -> reply to !a696579c: 'ack: hello tom'   (dry-run — pass --send to actually transmit)
+```
+
 The simulator's `simulate_reply()` is a stub echo — swap it for an LLM/webhook to
-prototype an autonomous mesh bot before wiring up the full Hermes adapter.
+prototype an autonomous mesh bot before wiring up the full Hermes adapter. See
+[docs/usage.md](docs/usage.md) for the full walkthrough.
 
 ## Development
 
