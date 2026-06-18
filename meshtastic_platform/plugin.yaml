@@ -16,8 +16,12 @@ requires_env:
 
 optional_env:
   - name: MESHTASTIC_REPLY_ALL
-    description: "Reply to channel messages too, not just direct messages (1/true/yes). Default: DMs only."
-    prompt: "Reply to all channel messages? (true/false)"
+    description: "Reply on every channel incl. public Primary (1/true/yes). Default: DMs only."
+    prompt: "Reply on all channels? (true/false)"
+    password: false
+  - name: MESHTASTIC_REPLY_CHANNELS
+    description: "Reply on DMs plus these channel indices, e.g. '1' or '1,2' (your private channels). Public Primary (0) is excluded unless listed."
+    prompt: "Reply channels (comma-separated indices, or empty)"
     password: false
   - name: MESHTASTIC_HERMES_DB
     description: "Path to the node-interaction knowledge-base SQLite file (defaults under $HERMES_HOME)."

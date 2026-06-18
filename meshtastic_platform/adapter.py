@@ -40,8 +40,19 @@ except Exception:  # pragma: no cover - exercised only outside Hermes
     _HAVE_GATEWAY = False
 
 
-def _reply_only_dms() -> bool:
-    return os.getenv("MESHTASTIC_REPLY_ALL", "").lower() not in {"1", "true", "yes"}
+def _allowed_channels_from_env():
+    """Resolve the channel reply-allowlist from env.
+
+    MESHTASTIC_REPLY_ALL=true   -> every channel.
+    MESHTASTIC_REPLY_CHANNELS="1,2" -> DMs + those channel indices (your private
+                                       channels; public Primary/0 excluded by default).
+    Neither                     -> DMs only.
+    """
+    from meshtastic_hermes import gateway_bridge as gb
+
+    if os.getenv("MESHTASTIC_REPLY_ALL", "").lower() in {"1", "true", "yes"}:
+        return gb.ALL_CHANNELS
+    return gb.parse_channel_spec(os.getenv("MESHTASTIC_REPLY_CHANNELS"))
 
 
 if _HAVE_GATEWAY:
@@ -53,7 +64,7 @@ if _HAVE_GATEWAY:
             super().__init__(config=config, platform=Platform("meshtastic"))
             extra = getattr(config, "extra", {}) or {}
             self.host = os.getenv("MESHTASTIC_HOST") or extra.get("host", "")
-            self.dms_only = _reply_only_dms()
+            self.allowed_channels = _allowed_channels_from_env()
             self._loop: asyncio.AbstractEventLoop | None = None
             self._mgr = None
 
@@ -102,7 +113,9 @@ if _HAVE_GATEWAY:
                 from meshtastic_hermes import gateway_bridge as gb
 
                 inbound = gb.inbound_from_packet(packet, self._mgr.my_node_id())
-                if inbound is None or not gb.should_reply(inbound, dms_only=self.dms_only):
+                if inbound is None or not gb.should_reply(
+                    inbound, allowed_channels=self.allowed_channels
+                ):
                     return
                 # Cross the thread boundary into the gateway's event loop.
                 asyncio.run_coroutine_threadsafe(self._dispatch(inbound), self._loop)

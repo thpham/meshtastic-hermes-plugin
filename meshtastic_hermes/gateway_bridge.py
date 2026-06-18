@@ -87,14 +87,49 @@ def outbound_target(chat_id: str) -> dict:
     return {"dest_id": chat_id, "channel_index": 0, "pki": True}
 
 
-def should_reply(inbound: dict, *, dms_only: bool = True) -> bool:
-    """Reply policy. Default: only direct messages addressed to us.
+# Sentinel for "reply on every channel" (vs. None = no channels, or a set of indices).
+ALL_CHANNELS = "__all__"
 
-    DMs-only avoids channel spam and bot-to-bot loops on shared channels.
+
+def parse_channel_spec(spec: Any) -> set[int] | str | None:
+    """Parse a channel-allowlist spec into None | set[int] | ALL_CHANNELS.
+
+    - None or ""        -> None          (DMs only)
+    - "all"             -> ALL_CHANNELS  (every channel)
+    - "1,2" / "1, 2"    -> {1, 2}        (those channel indices)
     """
-    if dms_only:
-        return inbound["is_dm"]
-    return True
+    if spec is None:
+        return None
+    text = str(spec).strip().lower()
+    if not text:
+        return None
+    if text == "all":
+        return ALL_CHANNELS
+    out: set[int] = set()
+    for part in text.split(","):
+        part = part.strip()
+        if part:
+            try:
+                out.add(int(part))
+            except ValueError:
+                continue
+    return out or None
+
+
+def should_reply(inbound: dict, *, allowed_channels: set[int] | str | None = None) -> bool:
+    """Reply policy: always reply to DMs; reply on a channel only if it's allowed.
+
+    ``allowed_channels``: None = DMs only; a set of indices = DMs + those channels
+    (e.g. your private channels, excluding public Primary); ALL_CHANNELS = any channel.
+    This keeps the public Primary channel (index 0) silent unless explicitly opted in.
+    """
+    if inbound["is_dm"]:
+        return True
+    if allowed_channels is None:
+        return False
+    if allowed_channels == ALL_CHANNELS:
+        return True
+    return inbound["channel"] in allowed_channels
 
 
 def process_inbound(
@@ -102,7 +137,7 @@ def process_inbound(
     my_node_id: str | None,
     responder: Responder,
     *,
-    dms_only: bool = True,
+    allowed_channels: set[int] | str | None = None,
 ) -> dict | None:
     """End-to-end routing decision for one packet (pure; no I/O).
 
@@ -113,7 +148,7 @@ def process_inbound(
     inbound = inbound_from_packet(packet, my_node_id)
     if inbound is None:
         return None
-    if not should_reply(inbound, dms_only=dms_only):
+    if not should_reply(inbound, allowed_channels=allowed_channels):
         return {"action": "skip", "inbound": inbound}
     chat_id = chat_id_for(inbound)
     return {

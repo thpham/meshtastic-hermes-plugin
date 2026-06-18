@@ -316,11 +316,11 @@ def _cmd_bridge(ctx: FakeContext, args) -> int:
     mgr = get_manager()
     print(_pretty(json.dumps(mgr.connect(host))))
     my = mgr.my_node_id()
-    dms_only = not args.all
+    allowed_channels = gb.ALL_CHANNELS if args.all else gb.parse_channel_spec(args.channels)
 
     def on_rx(packet, interface=None):
         try:
-            result = gb.process_inbound(packet, my, simulate_reply, dms_only=dms_only)
+            result = gb.process_inbound(packet, my, simulate_reply, allowed_channels=allowed_channels)
         except Exception:
             return
         if result is None:
@@ -348,7 +348,12 @@ def _cmd_bridge(ctx: FakeContext, args) -> int:
 
     pub.subscribe(on_rx, "meshtastic.receive")
     mode = "SEND" if args.send else "DRY-RUN"
-    scope = "all messages" if args.all else "DMs only"
+    if args.all:
+        scope = "DMs + all channels"
+    elif allowed_channels:
+        scope = f"DMs + channels {sorted(allowed_channels)}"
+    else:
+        scope = "DMs only"
     print(
         f"Bridge simulator [{mode}, {scope}], local node {my}. "
         f"Running {int(args.seconds)}s (Ctrl-C to stop)...",
@@ -387,7 +392,8 @@ def main(argv=None) -> int:
     p_bridge.add_argument("host", nargs="?", help="Node host (else MESHTASTIC_HOST)")
     p_bridge.add_argument("seconds", nargs="?", type=int, default=300)
     p_bridge.add_argument("--send", action="store_true", help="Actually transmit replies")
-    p_bridge.add_argument("--all", action="store_true", help="Reply to channel messages too, not just DMs")
+    p_bridge.add_argument("--all", action="store_true", help="Reply on every channel (incl. public Primary)")
+    p_bridge.add_argument("--channels", help="DMs + these channel indices, e.g. '1' or '1,2' (your private channels)")
 
     ns = parser.parse_args(argv)
     dispatch = {

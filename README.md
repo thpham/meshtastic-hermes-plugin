@@ -158,8 +158,10 @@ channel: inbound mesh text **drives the agent**, and the agent's replies are sen
 over the radio. It mirrors Hermes' bundled adapters (e.g. IRC) and reuses this repo's
 connection/observer/KB code.
 
-- **Reply policy:** direct messages only by default (avoids channel spam and bot loops);
-  set `MESHTASTIC_REPLY_ALL=true` to also answer channel messages.
+- **Reply policy:** direct messages only by default (avoids channel spam and bot loops).
+  Opt specific channels in with `MESHTASTIC_REPLY_CHANNELS="1,2"` (e.g. your private
+  channels — public Primary/0 stays silent unless listed), or `MESHTASTIC_REPLY_ALL=true`
+  for every channel.
 - **Encryption:** replies to a DM go out **end-to-end (PKI)** to the sender; channel
   replies use the channel key. Opaque/undecryptable traffic is never answered.
 - **Enable on NixOS:** add `meshtastic-platform` to `services.hermes-agent.settings.plugins.enabled`
@@ -172,8 +174,10 @@ without Hermes:
 ```bash
 # Watch inbound DMs and print the reply the agent WOULD send (no transmit):
 python -m meshtastic_hermes bridge 192.168.55.73        # or: just standalone bridge ...
-# Actually transmit replies (echo responder), or include channel messages:
-python -m meshtastic_hermes bridge 192.168.55.73 --send --all
+# Reply on DMs + your private channel(s), and actually transmit (echo responder):
+python -m meshtastic_hermes bridge 192.168.55.73 --channels 1 --send
+# Or every channel incl. public Primary:
+python -m meshtastic_hermes bridge 192.168.55.73 --all
 ```
 
 The simulator's `simulate_reply()` is a stub echo — swap it for an LLM/webhook to
