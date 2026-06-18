@@ -188,10 +188,16 @@ PKI requires the recipient's public key to be known to your node (Meshtastic fir
 `pki`) is only channel-PSK encrypted — addressed to one node, but readable by anyone on
 that channel.
 
-**Reliable delivery:** sends request an ack by default (`want_ack=true`), so the firmware
-retries on lossy multi-hop links — important for reaching distant nodes. The ack/nak is
-reported asynchronously by the firmware (as a routing packet), so it isn't returned by the
-send call itself. Pass `want_ack=false` for fire-and-forget.
+**Reliable delivery + confirmation:** sends request an ack by default (`want_ack=true`), so
+the firmware retries on lossy multi-hop links. For **direct messages** the call also blocks
+briefly for the firmware's ack/nak and reports it in an `ack` field:
+
+- `{"status": "delivered", "reason": "NONE"}` — confirmed delivered
+- `{"status": "failed", "reason": "MAX_RETRANSMIT"}` — no ack after retries
+- `{"status": "no_ack", "reason": "TIMEOUT"}` — no response within `ack_timeout` (default 15s)
+
+In the REPL, `dm` prints this `ack` block directly. Broadcasts don't block (no single
+recipient). Tune with `wait_ack` / `ack_timeout`, or `want_ack=false` for fire-and-forget.
 
 ## CLI
 

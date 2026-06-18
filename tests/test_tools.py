@@ -1,63 +1,96 @@
 """Tool-handler tests using a fake interface injected into the ConnectionManager.
 
-Covers the send paths (channel-PSK vs PKI) and the wantAck default/override without
-needing a radio.
+Covers the send paths (channel-PSK vs PKI), wantAck default/override, and the
+synchronous delivery-ack (onResponse) capture — without needing a radio.
 """
 
 from __future__ import annotations
 
 import json
 
-import pytest
-
 from meshtastic_hermes import connection, tools
 
 
 class FakeIface:
-    def __init__(self):
-        self.sendText_calls = []
+    """Records sendData calls and optionally simulates the firmware's routing ack.
+
+    `ack_reason=None` means "never call onResponse" (simulates a lost/no ack).
+    """
+
+    def __init__(self, ack_reason="NONE"):
         self.sendData_calls = []
         self.myInfo = None
-
-    def sendText(self, text, **kw):
-        self.sendText_calls.append((text, kw))
+        self._ack_reason = ack_reason
 
     def sendData(self, data, **kw):
         self.sendData_calls.append((data, kw))
+        cb = kw.get("onResponse")
+        if cb is not None and self._ack_reason is not None:
+            cb({
+                "fromId": kw.get("destinationId"),
+                "decoded": {"routing": {"errorReason": self._ack_reason}},
+            })
 
 
-@pytest.fixture
-def fake_iface(monkeypatch):
-    iface = FakeIface()
-    # Inject into the process-wide ConnectionManager singleton; monkeypatch restores.
+def _inject(monkeypatch, iface):
     monkeypatch.setattr(connection.get_manager(), "_iface", iface)
     return iface
 
 
-def test_send_text_wantack_defaults_true(fake_iface):
+def test_broadcast_uses_senddata_no_ack_wait(monkeypatch):
+    fake = _inject(monkeypatch, FakeIface())
     res = json.loads(tools.send_text({"text": "hi", "channel_index": 1}))
     assert res["sent"] is True
     assert res["want_ack"] is True
     assert res["encryption"] == "channel"
-    text, kw = fake_iface.sendText_calls[0]
-    assert text == "hi"
-    assert kw["wantAck"] is True
+    assert res["ack"] is None  # broadcasts don't block for an ack
+    data, kw = fake.sendData_calls[0]
+    assert data == b"hi"
     assert kw["channelIndex"] == 1
+    assert kw["wantAck"] is True
+    assert kw["pkiEncrypted"] is False
+    assert "destinationId" not in kw  # broadcast
+    assert "onResponse" not in kw     # no ack wait for broadcast
 
 
-def test_send_text_wantack_can_be_disabled(fake_iface):
-    json.loads(tools.send_text({"text": "yo", "want_ack": False}))
-    _, kw = fake_iface.sendText_calls[0]
-    assert kw["wantAck"] is False
-
-
-def test_send_text_pki_uses_senddata_with_ack(fake_iface):
+def test_dm_pki_waits_and_reports_delivered(monkeypatch):
+    fake = _inject(monkeypatch, FakeIface(ack_reason="NONE"))
     res = json.loads(tools.send_text({"text": "secret", "dest_id": "!a696579c", "pki": True}))
     assert res["encryption"] == "pki"
-    assert res["want_ack"] is True
-    assert fake_iface.sendText_calls == []  # PKI must NOT go through sendText
-    data, kw = fake_iface.sendData_calls[0]
+    assert res["ack"]["status"] == "delivered"
+    data, kw = fake.sendData_calls[0]
     assert data == b"secret"
     assert kw["destinationId"] == "!a696579c"
     assert kw["pkiEncrypted"] is True
     assert kw["wantAck"] is True
+    assert kw["onResponseAckPermitted"] is True
+
+
+def test_dm_reports_failure_on_nak(monkeypatch):
+    _inject(monkeypatch, FakeIface(ack_reason="MAX_RETRANSMIT"))
+    res = json.loads(tools.send_text({"text": "x", "dest_id": "!a696579c"}))
+    assert res["ack"]["status"] == "failed"
+    assert res["ack"]["reason"] == "MAX_RETRANSMIT"
+
+
+def test_dm_reports_no_ack_on_timeout(monkeypatch):
+    _inject(monkeypatch, FakeIface(ack_reason=None))  # never acks
+    res = json.loads(tools.send_text({"text": "x", "dest_id": "!a696579c", "ack_timeout": 0.1}))
+    assert res["ack"]["status"] == "no_ack"
+    assert res["ack"]["reason"] == "TIMEOUT"
+
+
+def test_want_ack_false_disables_reliability(monkeypatch):
+    fake = _inject(monkeypatch, FakeIface())
+    res = json.loads(tools.send_text({"text": "yo", "want_ack": False}))
+    assert res["want_ack"] is False
+    assert res["ack"] is None
+    _, kw = fake.sendData_calls[0]
+    assert kw["wantAck"] is False
+    assert "onResponse" not in kw
+
+
+def test_pki_requires_dest(monkeypatch):
+    _inject(monkeypatch, FakeIface())
+    res = json.loads(tools.send_text({"text": "hi", "pki": True}))
+    assert "requires dest_id" in res["error"]

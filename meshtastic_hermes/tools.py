@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from typing import Any, Callable
 
 from .connection import MeshtasticUnavailable, get_manager
@@ -80,40 +81,65 @@ def send_text(args: dict) -> str:
     dest_id = args.get("dest_id")
     pki = bool(args.get("pki", False))
     # Reliable delivery by default: the firmware retries and reports ack/nak. Helps
-    # messages survive lossy multi-hop links. The ack itself arrives asynchronously
-    # (as a routing packet), so it is not reflected in this synchronous result.
+    # messages survive lossy multi-hop links.
     want_ack = bool(args.get("want_ack", True))
+    # Block for the ack/nak by default for DIRECTED messages (a single recipient, so
+    # the ack is meaningful); broadcasts have no single recipient, so don't block.
+    wait_ack = bool(args.get("wait_ack", bool(dest_id) and want_ack))
+    ack_timeout = float(args.get("ack_timeout", 15.0))
 
     if pki and not dest_id:
         return _err("pki=true requires dest_id — public-key encryption is point-to-point.")
 
     iface = get_manager().iface
-    if pki:
-        # End-to-end: the firmware encrypts the payload to the recipient's public
-        # key (Curve25519), independent of the channel PSK. Requires the recipient's
-        # key to be known to the local node (firmware 2.5+). channel_index is only
-        # the routing slot here.
+
+    # We send everything via sendData(portNum=TEXT_MESSAGE_APP) — identical on-air to
+    # sendText — because only sendData exposes onResponseAckPermitted, needed to have
+    # the routing ACK invoke our callback. pkiEncrypted toggles end-to-end encryption.
+    send_kwargs: dict[str, Any] = {
+        "portNum": _TEXT_MESSAGE_APP,
+        "channelIndex": channel_index,
+        "wantAck": want_ack,
+        "pkiEncrypted": pki,
+    }
+    if dest_id:
+        send_kwargs["destinationId"] = dest_id
+
+    ack: dict[str, Any] | None = None
+    if want_ack and wait_ack:
+        event = threading.Event()
+        captured: dict[str, Any] = {}
+
+        def _on_response(resp: dict) -> None:
+            routing = (resp.get("decoded") or {}).get("routing") or {}
+            captured["reason"] = routing.get("errorReason", "NONE")
+            captured["from"] = resp.get("fromId")
+            event.set()
+
         iface.sendData(
             text.encode("utf-8"),
-            destinationId=dest_id,
-            portNum=_TEXT_MESSAGE_APP,
-            channelIndex=channel_index,
-            wantAck=want_ack,
-            pkiEncrypted=True,
+            onResponse=_on_response,
+            onResponseAckPermitted=True,
+            **send_kwargs,
         )
+        if event.wait(ack_timeout):
+            reason = captured.get("reason", "NONE")
+            ack = {
+                "status": "delivered" if reason == "NONE" else "failed",
+                "reason": reason,
+                "from": captured.get("from"),
+            }
+        else:
+            ack = {"status": "no_ack", "reason": "TIMEOUT", "timeout_s": ack_timeout}
     else:
-        # Channel-PSK encryption: readable by anyone holding the channel key (and on
-        # the default Primary channel that key is public).
-        kwargs: dict[str, Any] = {"channelIndex": channel_index, "wantAck": want_ack}
-        if dest_id:
-            kwargs["destinationId"] = dest_id
-        iface.sendText(text, **kwargs)
+        iface.sendData(text.encode("utf-8"), **send_kwargs)
 
     return _ok(
         {
             "sent": True,
             "encryption": "pki" if pki else "channel",
             "want_ack": want_ack,
+            "ack": ack,
             "text": text,
             "channel_index": channel_index,
             "dest_id": dest_id,
