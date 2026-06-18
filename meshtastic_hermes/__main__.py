@@ -112,18 +112,97 @@ def _cmd_observe(ctx: FakeContext, args) -> int:
     return 0
 
 
-def _cmd_repl(ctx: FakeContext, args) -> int:
-    def call(name: str, payload: dict | None = None) -> str:
-        return ctx.tools[name]["handler"](payload or {})
+_REPL_HELP = """Commands (channel is an INDEX from `channels`; 0 = Primary):
+  send <channel> <text...>            broadcast text on a channel
+  dm <node_id> <channel> <text...>    direct message to one node
+  recent [count]                      recently decoded text messages
+  nodes | channels | metrics          live radio info
+  kb                                  knowledge-base summary
+  connect [host] | disconnect         manage the link
+  <tool_name> [json]                  call any tool raw (e.g. meshtastic_kb_nodes {"limit":5})
+  tools | help | quit"""
 
+# Friendly zero-argument verbs -> tool name.
+_REPL_SIMPLE = {
+    "nodes": "meshtastic_list_nodes",
+    "channels": "meshtastic_list_channels",
+    "metrics": "meshtastic_device_metrics",
+    "kb": "meshtastic_kb_summary",
+    "disconnect": "meshtastic_disconnect",
+}
+
+
+def repl_command(ctx: FakeContext, line: str) -> str:
+    """Evaluate one REPL command line and return text to print.
+
+    Supports friendly verbs (channel as a positional before the text) plus a raw
+    ``<tool_name> [json]`` fallback. Pure function of (ctx, line) for testability.
+    """
+    def call(name: str, payload: dict | None = None) -> str:
+        return _pretty(ctx.tools[name]["handler"](payload or {}))
+
+    parts = line.split()
+    verb = parts[0]
+
+    if verb == "send":
+        # send <channel> <text...>  — channel first, on purpose, to avoid an
+        # accidental Primary (0) flood.
+        if len(parts) < 3:
+            return json.dumps({"error": "usage: send <channel> <text...>"})
+        try:
+            channel = int(parts[1])
+        except ValueError:
+            return json.dumps({"error": f"channel must be an integer index, got {parts[1]!r}"})
+        text = line.split(None, 2)[2]
+        return call("meshtastic_send_text", {"channel_index": channel, "text": text})
+
+    if verb == "dm":
+        # dm <node_id> <channel> <text...>
+        if len(parts) < 4:
+            return json.dumps({"error": "usage: dm <node_id> <channel> <text...>"})
+        try:
+            channel = int(parts[2])
+        except ValueError:
+            return json.dumps({"error": f"channel must be an integer index, got {parts[2]!r}"})
+        text = line.split(None, 3)[3]
+        return call(
+            "meshtastic_send_text",
+            {"dest_id": parts[1], "channel_index": channel, "text": text},
+        )
+
+    if verb == "recent":
+        if len(parts) > 1:
+            try:
+                return call("meshtastic_recent_messages", {"limit": int(parts[1])})
+            except ValueError:
+                return json.dumps({"error": "usage: recent [count]"})
+        return call("meshtastic_recent_messages")
+
+    if verb == "connect":
+        return call("meshtastic_connect", {"host": parts[1]} if len(parts) > 1 else {})
+
+    if verb in _REPL_SIMPLE:
+        return call(_REPL_SIMPLE[verb])
+
+    # Raw fallback: <tool_name> [json-args]
+    name, _, raw = line.partition(" ")
+    if name not in ctx.tools:
+        return json.dumps({"error": f"unknown command {name!r}", "hint": "type 'help'"})
+    try:
+        payload = json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError as exc:
+        return json.dumps({"error": f"invalid JSON args: {exc}"})
+    return call(name, payload)
+
+
+def _cmd_repl(ctx: FakeContext, args) -> int:
     host = args.host or os.environ.get("MESHTASTIC_HOST")
     if host:
-        print(_pretty(call("meshtastic_connect", {"host": host})))
+        print(_pretty(ctx.tools["meshtastic_connect"]["handler"]({"host": host})))
 
     print(
-        "Interactive REPL — the connection persists across calls in this one process.\n"
-        "  <tool> [json-args]   e.g.  meshtastic_send_text {\"text\": \"hi\"}\n"
-        "  help | quit",
+        "Interactive REPL — connection persists across commands in this process.\n"
+        "Type 'help' for friendly commands, or call any tool raw. 'quit' to exit.",
         file=sys.stderr,
     )
     while True:
@@ -137,21 +216,15 @@ def _cmd_repl(ctx: FakeContext, args) -> int:
         if line in ("quit", "exit"):
             break
         if line in ("help", "?"):
+            print(_REPL_HELP)
+            continue
+        if line == "tools":
             _cmd_list(ctx, args)
             continue
-        name, _, raw = line.partition(" ")
-        if name not in ctx.tools:
-            print(json.dumps({"error": f"unknown tool {name!r}", "available": sorted(ctx.tools)}))
-            continue
-        try:
-            payload = json.loads(raw) if raw.strip() else {}
-        except json.JSONDecodeError as exc:
-            print(json.dumps({"error": f"invalid JSON args: {exc}"}))
-            continue
-        print(_pretty(call(name, payload)))
+        print(repl_command(ctx, line))
 
     try:
-        call("meshtastic_disconnect")
+        ctx.tools["meshtastic_disconnect"]["handler"]({})
     except Exception:
         pass
     return 0

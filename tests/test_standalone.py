@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from meshtastic_hermes.__main__ import build_registry, main
+from meshtastic_hermes.__main__ import build_registry, main, repl_command
 
 
 def test_registry_wires_everything():
@@ -47,18 +47,32 @@ def test_list_command(capsys):
 
 def test_repl_dispatches_offline_tools(capsys, monkeypatch):
     # Feed REPL input lines (no host -> no auto-connect), then quit.
-    lines = iter(["meshtastic_kb_summary", "help", "quit"])
+    lines = iter(["kb", "tools", "quit"])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(lines))
     rc = main(["repl"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert '"nodes"' in out      # kb_summary ran in-process
-    assert "12 tools" in out     # help listed tools
+    assert '"nodes"' in out             # `kb` friendly verb ran kb_summary
+    assert "meshtastic_connect" in out  # `tools` listed the tool names
 
 
-def test_repl_reports_unknown_tool(capsys, monkeypatch):
-    lines = iter(["bogus_tool", "quit"])
+def test_repl_reports_unknown_command(capsys, monkeypatch):
+    lines = iter(["bogus_cmd", "quit"])
     monkeypatch.setattr("builtins.input", lambda _prompt="": next(lines))
     rc = main(["repl"])
     assert rc == 0
-    assert "unknown tool" in capsys.readouterr().out
+    assert "unknown command" in capsys.readouterr().out
+
+
+def test_repl_send_friendly_parsing():
+    # `send <channel> <text...>` builds the right args; offline -> not connected.
+    ctx = build_registry()
+    assert "usage: send" in repl_command(ctx, "send")
+    assert "integer index" in repl_command(ctx, "send notanint hi")
+    # channel + multi-word text parses; tool runs (errors only because offline).
+    assert "Not connected" in repl_command(ctx, "send 1 hello pommeraie")
+
+
+def test_repl_kb_friendly_verb_offline():
+    ctx = build_registry()
+    assert '"nodes"' in repl_command(ctx, "kb")

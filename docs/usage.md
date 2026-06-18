@@ -142,10 +142,14 @@ python -m meshtastic_hermes list                 # or: just standalone list
 python -m meshtastic_hermes call meshtastic_kb_summary
 
 # Interactive shell with a PERSISTENT connection (auto-connects to the host, or
-# MESHTASTIC_HOST). Connect once, then send/read across multiple calls:
+# MESHTASTIC_HOST). Connect once, then send/read across multiple commands.
+# Friendly verbs take the channel INDEX before the text (avoids a Primary flood):
 python -m meshtastic_hermes repl 192.168.55.73
-#   meshtastic> meshtastic_send_text {"text": "hello mesh"}
-#   meshtastic> meshtastic_recent_messages {"limit": 5}
+#   meshtastic> channels                         # find the index you want
+#   meshtastic> send 1 hello pommeraie           # broadcast on channel 1
+#   meshtastic> dm !444a8c86 1 hi there          # direct message on channel 1
+#   meshtastic> recent 5                          # last 5 decoded messages
+#   meshtastic> nodes                             # type 'help' for all commands
 #   meshtastic> quit
 
 # One-shot: connect, observe live traffic for N seconds, dump nodes + KB
