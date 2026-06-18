@@ -48,28 +48,53 @@ crashing.)
 > Hermes' `lazy_deps` auto-installer is **not** usable here: it only installs packages on
 > its maintainer-curated in-tree allowlist, which a third-party `meshtastic` key isn't on.
 
-### Local development (recommended)
+### On NixOS (flake) — recommended for deployment
 
-This repo ships a Nix dev shell (`flake.nix` + `.envrc`) and a `Justfile`.
+The flake exposes an **overlay** that injects `meshtastic-hermes-plugin` into the Python
+package set, so it builds against the exact Python your Hermes service uses:
+
+```nix
+{
+  inputs.meshtastic-hermes-plugin.url = "github:thpham/meshtastic-hermes-plugin";
+
+  # In your NixOS configuration:
+  nixpkgs.overlays = [ inputs.meshtastic-hermes-plugin.overlays.default ];
+  services.hermes-agent.extraPythonPackages = [
+    pkgs.python3Packages.meshtastic-hermes-plugin
+  ];
+}
+```
+
+`meshtastic` comes in transitively from nixpkgs. You still enable the plugin in Hermes
+(`plugins.enabled`) — see [Configuration](#configuration).
+
+There's also a standalone package output (`nix build`, or
+`inputs.<this>.packages.${system}.default`) if you want to build/inspect it directly.
+
+### Local development (`nix develop` / direnv)
+
+This repo ships a **reproducible, pip-free** dev shell (`flake.nix` + `.envrc`): every Python
+dependency comes from nixpkgs and the working tree is on `PYTHONPATH`, so there's no venv to
+manage and edits are picked up immediately.
 
 ```bash
-direnv allow            # or: nix develop   — creates .venv and installs ".[dev]" (pulls meshtastic)
+direnv allow            # or: nix develop   — enters the shell, deps from nixpkgs
+just test               # run the KB unit tests (no radio required)
+just lint               # ruff
 just link               # symlink meshtastic_hermes → ~/.hermes/plugins/meshtastic
 just enable             # add "meshtastic" to plugins.enabled in ~/.hermes/config.yaml
 just hermes-debug       # HERMES_PLUGINS_DEBUG=1 hermes plugins list  (verify discovery)
 ```
 
-Then start `hermes` and run `/plugins` — you should see `meshtastic` with its tools.
+> On **macOS** the first shell entry builds `meshtastic` from source (it isn't in the
+> binary cache for Darwin); subsequent entries are instant. On Linux it's fetched prebuilt.
 
-### As a pip package
+### As a pip package (non-Nix)
 
 ```bash
 pip install .                     # installs the entry point AND the meshtastic dependency
 hermes plugins enable meshtastic  # plugins are disabled by default
 ```
-
-On NixOS, declare the package via `services.hermes-agent.extraPythonPackages` so it lands in
-Hermes' interpreter.
 
 ## Configuration
 
