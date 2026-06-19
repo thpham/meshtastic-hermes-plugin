@@ -22,9 +22,21 @@ import asyncio
 import json
 import logging
 import os
+import sys
 import time
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# This adapter imports its sibling package `meshtastic_hermes` (for gateway_bridge,
+# connection, tools). When the project is pip-installed both packages are on sys.path
+# and this is a no-op. When it's loaded as a *directory-drop* plugin (e.g. the repo
+# cloned into ~/.hermes/plugins/), the sibling package lives one level up (repo root)
+# and is NOT importable by default — add the repo root so `import meshtastic_hermes`
+# works in both layouts.
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 try:  # Available only inside the Hermes gateway runtime.
     from gateway.config import Platform
