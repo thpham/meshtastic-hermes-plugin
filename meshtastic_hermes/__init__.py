@@ -55,10 +55,11 @@ def _on_session_start(session_id=None, **kwargs):
 
 
 def _on_session_end(session_id=None, **kwargs):
-    try:
-        get_manager().disconnect()
-    except Exception:
-        pass
+    # Intentionally does NOT disconnect: the radio link is a process-wide singleton
+    # shared with the platform-adapter gateway, and the observer must keep filling the
+    # knowledge base between sessions. Disconnecting here would tear down the adapter's
+    # connection. The connection is released when the process exits.
+    return
 
 
 # ----------------------------------------------------------------------
