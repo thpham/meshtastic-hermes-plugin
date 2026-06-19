@@ -3,15 +3,16 @@
 CONNECT = {
     "name": "meshtastic_connect",
     "description": (
-        "Connect to a Meshtastic node over TCP/IP. Opens the link and begins "
-        "observing all mesh traffic into the knowledge base. If no host is given, "
-        "uses the MESHTASTIC_HOST environment variable. Call this before any other "
-        "Meshtastic tool."
+        "Usually NOT needed: when MESHTASTIC_HOST is set the plugin auto-connects at "
+        "startup and a supervisor keeps the link up and reconnects automatically. Call "
+        "this only to connect to a SPECIFIC host (when MESHTASTIC_HOST is unset), to "
+        "switch nodes, or to force a reconnect. Opens the TCP link and starts observing "
+        "traffic into the knowledge base."
     ),
     "parameters": {
         "type": "object",
         "properties": {
-            "host": {"type": "string", "description": "Node host/IP, e.g. '192.168.1.50'. Optional if MESHTASTIC_HOST is set."},
+            "host": {"type": "string", "description": "Node host/IP, e.g. '192.168.55.73'. Optional if MESHTASTIC_HOST is set."},
             "port": {"type": "integer", "description": "TCP port (default 4403)."},
         },
         "required": [],
@@ -20,7 +21,11 @@ CONNECT = {
 
 DISCONNECT = {
     "name": "meshtastic_disconnect",
-    "description": "Close the active Meshtastic connection and stop observing traffic.",
+    "description": (
+        "Stop the Meshtastic connection and the auto-reconnect supervisor (it will NOT "
+        "reconnect until meshtastic_connect is called again). Rarely needed — the link is "
+        "normally kept up automatically. Use to deliberately go offline."
+    ),
     "parameters": {"type": "object", "properties": {}, "required": []},
 }
 

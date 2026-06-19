@@ -23,7 +23,8 @@ people's private channels.
 
 ## Prerequisites
 
-- The `meshtastic` plugin loaded and connected (`meshtastic_connect`).
+- The `meshtastic` plugin loaded. The connection is automatic when `MESHTASTIC_HOST` is
+  set (auto-connect + self-healing) — you normally do NOT call `meshtastic_connect`.
 - Know the target: a channel index (from `meshtastic_list_channels`) or a node id.
 
 ## Quick Reference
