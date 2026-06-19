@@ -18,6 +18,8 @@ import sys
 import threading
 from typing import Any
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_TCP_PORT = 4403
 
 
@@ -112,8 +114,17 @@ class ConnectionManager:
             # including encrypted PRIVATE_APP traffic on channels we cannot read.
             self._observer = _observer.get_observer()
             pub.subscribe(self._observer.on_receive, "meshtastic.receive")
+            # Detect drops (e.g. the node resetting the link / "Connection reset by
+            # peer") so is_connected() stays truthful and the next use cleanly
+            # reconnects instead of timing out on a dead interface.
+            pub.subscribe(self._on_connection_lost, "meshtastic.connection.lost")
 
         return self.status()
+
+    def _on_connection_lost(self, interface=None) -> None:
+        with self._lock:
+            self._iface = None
+        logger.warning("Meshtastic connection lost — marked disconnected (reconnect on next use)")
 
     def disconnect(self) -> dict[str, Any]:
         with self._lock:
