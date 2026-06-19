@@ -79,6 +79,26 @@ def test_close_locked_preserves_target_host(monkeypatch):
     assert mgr._port == 4403
 
 
+def test_connection_lost_closes_stale_iface():
+    # On loss the dead interface is stashed (not closed on the reader thread) and then
+    # closed by _close_locked — cancelling its heartbeat timer (no BrokenPipe spam).
+    mgr = connection.ConnectionManager()
+    closed = []
+
+    class FakeIface:
+        def close(self):
+            closed.append(True)
+
+    fake = FakeIface()
+    mgr._iface = fake
+    mgr._on_connection_lost(interface=fake)
+    assert mgr._iface is None
+    assert fake in mgr._stale_ifaces
+    mgr._close_locked()
+    assert closed == [True]
+    assert mgr._stale_ifaces == []
+
+
 def test_supervisor_lifecycle(monkeypatch):
     # connect() starts a maintained connection (supervisor) without a real radio;
     # disconnect() stops it. _open is stubbed to "succeed".

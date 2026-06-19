@@ -106,6 +106,10 @@ class ConnectionManager:
         self._want_connected = False
         self._stop = threading.Event()
         self._supervisor: threading.Thread | None = None
+        # Interfaces that lost their connection but haven't been closed yet. We close
+        # them from a safe thread (not the library's reader thread) to cancel their
+        # heartbeat timers, which otherwise keep writing to dead sockets (BrokenPipe).
+        self._stale_ifaces: list[Any] = []
 
     # ------------------------------------------------------------------
 
@@ -176,7 +180,13 @@ class ConnectionManager:
             self._stop.wait(3)  # poll for drops
 
     def _on_connection_lost(self, interface=None) -> None:
+        # Called on the library's reader thread — do NOT close here (close() may join
+        # the very thread we're on). Stash the dead interface for the supervisor/next
+        # _open() to close safely.
         with self._lock:
+            old = interface or self._iface
+            if old is not None:
+                self._stale_ifaces.append(old)
             self._iface = None
         logger.warning("Meshtastic connection lost — supervisor will reconnect")
 
@@ -199,11 +209,15 @@ class ConnectionManager:
             pub.unsubscribe(self._on_connection_lost, "meshtastic.connection.lost")
         except Exception:
             pass
-        if self._iface is not None:
-            try:
-                self._iface.close()
-            except Exception:
-                pass
+        # Close the current interface plus any stale ones from prior drops, cancelling
+        # their heartbeat timers (the source of BrokenPipe tracebacks on dead sockets).
+        for old in [self._iface, *self._stale_ifaces]:
+            if old is not None:
+                try:
+                    old.close()
+                except Exception:
+                    pass
+        self._stale_ifaces = []
         self._iface = None
         # NOTE: do NOT clear self._host/_port here. They are the *target* config used
         # by _open()/the supervisor to (re)connect. _open() calls _close_locked()
