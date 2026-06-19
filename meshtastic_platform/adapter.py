@@ -243,15 +243,21 @@ def register(ctx):
         return
 
     # Make the dormant-vs-active state visible: the gateway only creates+connects the
-    # adapter when MESHTASTIC_HOST is set (check_fn/env_enablement gate on it). Without
-    # this line, a missing host looks like "nothing happened" in the journal.
+    # adapter when MESHTASTIC_HOST is set (check_fn/env_enablement gate on it). Use
+    # WARNING for the unset case so it shows at the gateway's default log level (INFO
+    # would be hidden unless MESHTASTIC_DEBUG raised it).
     host = os.getenv("MESHTASTIC_HOST")
-    logger.info(
-        "meshtastic-platform registered (MESHTASTIC_HOST=%s, reply allowed_channels=%r); "
-        "the gateway activates the adapter only when MESHTASTIC_HOST is set",
-        host or "(unset — adapter will stay dormant)",
-        _allowed_channels_from_env(),
-    )
+    if host:
+        logger.info(
+            "meshtastic-platform registered (MESHTASTIC_HOST=%s, reply allowed_channels=%r)",
+            host,
+            _allowed_channels_from_env(),
+        )
+    else:
+        logger.warning(
+            "meshtastic-platform registered but MESHTASTIC_HOST is unset — the adapter will "
+            "stay dormant (no radio connection). Set MESHTASTIC_HOST in ~/.hermes/.env."
+        )
 
     ctx.register_platform(
         name="meshtastic",
