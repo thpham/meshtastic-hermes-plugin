@@ -31,16 +31,26 @@ def enable_debug_logging() -> bool:
     """
     if os.environ.get("MESHTASTIC_DEBUG", "").strip().lower() not in {"1", "true", "yes", "on"}:
         return False
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
-    handler._mesh_debug = True  # type: ignore[attr-defined]  # marker for dedup
-    for name in ("meshtastic_hermes", "meshtastic_platform"):
-        lg = logging.getLogger(name)
-        lg.setLevel(logging.DEBUG)
-        if not any(getattr(h, "_mesh_debug", False) for h in lg.handlers):
-            lg.addHandler(handler)
-        lg.propagate = False  # avoid double-logging through the gateway's root handler
+
+    # Hermes loads plugins under a mangled namespace (e.g.
+    # `hermes_plugins.<key>__meshtastic_platform.adapter`), so we can't target our
+    # logger names directly. Attach a stderr handler to the ROOT logger that only
+    # emits meshtastic records, and lower the root level so DEBUG/INFO propagate to
+    # it. The gateway's own handler keeps its WARNING level, so nothing else is noisier.
+    class _MeshtasticOnly(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            return "meshtastic" in record.name.lower()
+
+    root = logging.getLogger()
+    if not any(getattr(h, "_mesh_debug", False) for h in root.handlers):
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        handler.addFilter(_MeshtasticOnly())
+        handler._mesh_debug = True  # type: ignore[attr-defined]  # marker for dedup
+        root.addHandler(handler)
+    if root.level > logging.DEBUG or root.level == logging.NOTSET:
+        root.setLevel(logging.DEBUG)
     return True
 
 

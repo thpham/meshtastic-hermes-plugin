@@ -13,24 +13,30 @@ from meshtastic_hermes import connection, tools
 
 
 def test_enable_debug_logging_toggle(monkeypatch):
-    lg = logging.getLogger("meshtastic_hermes")
-    saved_handlers, saved_propagate = list(lg.handlers), lg.propagate
+    root = logging.getLogger()
+    saved_handlers, saved_level = list(root.handlers), root.level
     try:
         monkeypatch.delenv("MESHTASTIC_DEBUG", raising=False)
         assert connection.enable_debug_logging() is False
 
         monkeypatch.setenv("MESHTASTIC_DEBUG", "1")
         assert connection.enable_debug_logging() is True
-        assert any(getattr(h, "_mesh_debug", False) for h in lg.handlers)
+        mesh = [h for h in root.handlers if getattr(h, "_mesh_debug", False)]
+        assert len(mesh) == 1
         # idempotent — a second call must not add a duplicate handler
         connection.enable_debug_logging()
-        assert sum(getattr(h, "_mesh_debug", False) for h in lg.handlers) == 1
+        assert sum(getattr(h, "_mesh_debug", False) for h in root.handlers) == 1
+
+        # The handler emits only meshtastic records (works for the mangled name too).
+        h = mesh[0]
+        yes = logging.LogRecord(
+            "hermes_plugins.x__meshtastic_platform.adapter", logging.INFO, "", 0, "m", None, None
+        )
+        no = logging.LogRecord("gateway.run", logging.INFO, "", 0, "m", None, None)
+        assert h.filter(yes) and not h.filter(no)
     finally:
-        lg.handlers[:] = saved_handlers
-        lg.propagate = saved_propagate
-        pl = logging.getLogger("meshtastic_platform")
-        pl.handlers[:] = [h for h in pl.handlers if not getattr(h, "_mesh_debug", False)]
-        pl.propagate = True
+        root.handlers[:] = saved_handlers
+        root.setLevel(saved_level)
 
 
 class FakeIface:
