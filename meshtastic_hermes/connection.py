@@ -163,12 +163,30 @@ class ConnectionManager:
         }
 
 
-# Process-wide singleton.
-_MANAGER: ConnectionManager | None = None
+# Process-wide singletons live in a fixed sys.modules slot (NOT module globals).
+# Hermes loads the tools plugin under a mangled package name while the platform
+# adapter imports `meshtastic_hermes` as a top-level package (via its sys.path shim),
+# so there are TWO copies of this module — each with its own globals. Keying the
+# singletons off a fixed sys.modules entry makes both copies share ONE
+# ConnectionManager + Observer + KB, i.e. a single radio connection instead of two
+# competing ones.
+_SHARED_KEY = "meshtastic_hermes._shared_state"
+
+
+def _shared_state():
+    import types
+
+    st = sys.modules.get(_SHARED_KEY)
+    if st is None:
+        st = types.ModuleType(_SHARED_KEY)
+        st.manager = None
+        st.observer = None
+        sys.modules[_SHARED_KEY] = st
+    return st
 
 
 def get_manager() -> ConnectionManager:
-    global _MANAGER
-    if _MANAGER is None:
-        _MANAGER = ConnectionManager()
-    return _MANAGER
+    st = _shared_state()
+    if st.manager is None:
+        st.manager = ConnectionManager()
+    return st.manager

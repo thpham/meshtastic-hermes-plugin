@@ -107,12 +107,12 @@ class Observer:
         return items[-limit:][::-1]
 
 
-# Process-wide singleton, sharing the KB with tool handlers.
-_OBSERVER: Observer | None = None
-
-
 def get_observer() -> Observer:
-    global _OBSERVER
-    if _OBSERVER is None:
-        _OBSERVER = Observer()
-    return _OBSERVER
+    # Shared via the same fixed sys.modules slot as the connection manager, so the
+    # tools plugin and the platform adapter use ONE Observer + KB (see connection.py).
+    from .connection import _shared_state
+
+    st = _shared_state()
+    if getattr(st, "observer", None) is None:
+        st.observer = Observer()
+    return st.observer
