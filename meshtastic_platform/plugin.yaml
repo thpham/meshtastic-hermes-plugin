@@ -27,3 +27,7 @@ optional_env:
     description: "Path to the node-interaction knowledge-base SQLite file (defaults under $HERMES_HOME)."
     prompt: "Knowledge-base DB path (or empty)"
     password: false
+  - name: MESHTASTIC_DEBUG
+    description: "Set to 1 to log inbound messages and reply/skip decisions to the gateway journal."
+    prompt: "Enable debug logging? (1/true)"
+    password: false

@@ -124,6 +124,40 @@ below. It uses the same routing/policy code as the adapter.
 message must be addressed to your connected node and survive the RF path — multi-hop DMs on
 weak links are frequently lost, so an unanswered message is usually packet loss, not a bug.
 
+### Debugging the gateway adapter
+
+The adapter runs **inside the `hermes-gateway` service process** — not your interactive
+`hermes` chat — so `/meshtastic` in a chat shows a *different* process's connection. Debug
+it from the service logs.
+
+The gateway logs at WARNING by default, so set **`MESHTASTIC_DEBUG=1`** to make the adapter
+log every inbound message and its reply/skip decision regardless of the gateway's verbosity:
+
+```bash
+echo 'MESHTASTIC_DEBUG=1' >> ~/.hermes/.env     # or services.hermes-agent.environment on NixOS
+hermes gateway restart
+journalctl --user -u hermes-gateway -f          # systemd user service
+```
+
+What to look for:
+
+```
+INFO  meshtastic_platform.adapter: Meshtastic adapter connected to 192.168.55.73 (node !0aca4a9c, reply allowed_channels={1})
+DEBUG meshtastic_platform.adapter: inbound channel ch=1 from=!a696579c -> REPLY text='ping'
+INFO  meshtastic_platform.adapter: Meshtastic reply sent to ch:1
+```
+
+- No "connected" line → the adapter isn't running (check `MESHTASTIC_HOST` and that
+  `meshtastic-platform` is in `plugins.enabled`).
+- `allowed_channels=None` → only DMs will reply; set `MESHTASTIC_REPLY_CHANNELS=1`.
+- `-> skip (policy)` on a channel-1 message → that channel isn't in the allowlist.
+- No `inbound ...` line at all when you send on channel 1 → the message isn't reaching the
+  node (RF loss) or your node lacks that channel's key (can't decrypt it).
+
+For a quick offline check of the routing decision, the `bridge` simulator applies the same
+policy — but it opens a *second* connection to the node, so prefer stopping the gateway
+first (`hermes gateway stop`) to avoid competing for the radio's TCP slot.
+
 ## Quick start
 
 1. **Optionally** set a default node so the plugin auto-connects each session:

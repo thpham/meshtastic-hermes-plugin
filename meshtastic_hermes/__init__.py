@@ -109,6 +109,10 @@ def _setup_argparse(subparser):
 
 def register(ctx):
     """Entry point called once by Hermes at startup."""
+    from .connection import enable_debug_logging
+
+    enable_debug_logging()  # honors MESHTASTIC_DEBUG
+
     for schema, handler in _TOOLS:
         ctx.register_tool(
             name=schema["name"],

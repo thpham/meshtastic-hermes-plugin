@@ -7,8 +7,30 @@ synchronous delivery-ack (onResponse) capture — without needing a radio.
 from __future__ import annotations
 
 import json
+import logging
 
 from meshtastic_hermes import connection, tools
+
+
+def test_enable_debug_logging_toggle(monkeypatch):
+    lg = logging.getLogger("meshtastic_hermes")
+    saved_handlers, saved_propagate = list(lg.handlers), lg.propagate
+    try:
+        monkeypatch.delenv("MESHTASTIC_DEBUG", raising=False)
+        assert connection.enable_debug_logging() is False
+
+        monkeypatch.setenv("MESHTASTIC_DEBUG", "1")
+        assert connection.enable_debug_logging() is True
+        assert any(getattr(h, "_mesh_debug", False) for h in lg.handlers)
+        # idempotent — a second call must not add a duplicate handler
+        connection.enable_debug_logging()
+        assert sum(getattr(h, "_mesh_debug", False) for h in lg.handlers) == 1
+    finally:
+        lg.handlers[:] = saved_handlers
+        lg.propagate = saved_propagate
+        pl = logging.getLogger("meshtastic_platform")
+        pl.handlers[:] = [h for h in pl.handlers if not getattr(h, "_mesh_debug", False)]
+        pl.propagate = True
 
 
 class FakeIface:

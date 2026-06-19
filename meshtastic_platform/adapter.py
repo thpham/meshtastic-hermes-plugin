@@ -92,7 +92,12 @@ if _HAVE_GATEWAY:
 
             pub.subscribe(self._on_rx, "meshtastic.receive")
             self._mark_connected()
-            logger.info("Meshtastic adapter connected to %s", self.host)
+            logger.info(
+                "Meshtastic adapter connected to %s (node %s, reply allowed_channels=%r)",
+                self.host,
+                self._mgr.my_node_id(),
+                self.allowed_channels,
+            )
             return True
 
         async def disconnect(self) -> None:
@@ -113,9 +118,18 @@ if _HAVE_GATEWAY:
                 from meshtastic_hermes import gateway_bridge as gb
 
                 inbound = gb.inbound_from_packet(packet, self._mgr.my_node_id())
-                if inbound is None or not gb.should_reply(
-                    inbound, allowed_channels=self.allowed_channels
-                ):
+                if inbound is None:
+                    return
+                decision = gb.should_reply(inbound, allowed_channels=self.allowed_channels)
+                logger.debug(
+                    "inbound %s ch=%s from=%s -> %s text=%r",
+                    "DM" if inbound["is_dm"] else "channel",
+                    inbound["channel"],
+                    inbound["from_id"],
+                    "REPLY" if decision else "skip (policy)",
+                    inbound["text"],
+                )
+                if not decision:
                     return
                 # Cross the thread boundary into the gateway's event loop.
                 asyncio.run_coroutine_threadsafe(self._dispatch(inbound), self._loop)
@@ -162,10 +176,13 @@ if _HAVE_GATEWAY:
                     }
                 )
 
+            logger.debug("sending reply to chat_id=%s target=%s", chat_id, target)
             raw = await self._loop.run_in_executor(None, _do_send)
             data = json.loads(raw)
             if data.get("error"):
+                logger.warning("Meshtastic reply to %s failed: %s", chat_id, data["error"])
                 return SendResult(success=False, error=data["error"])
+            logger.info("Meshtastic reply sent to %s", chat_id)
             return SendResult(success=True, message_id=str(int(time.time() * 1000)))
 
         async def get_chat_info(self, chat_id):
@@ -194,6 +211,10 @@ def _env_enablement():
 
 def register(ctx):
     """Plugin entry point: called once by the Hermes plugin system."""
+    from meshtastic_hermes.connection import enable_debug_logging
+
+    enable_debug_logging()  # honors MESHTASTIC_DEBUG
+
     # Bundle skills (loaded as `meshtastic-platform:<name>`), independent of whether the
     # gateway runtime is present.
     from pathlib import Path
