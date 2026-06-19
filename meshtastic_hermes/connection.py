@@ -42,12 +42,23 @@ def enable_debug_logging() -> bool:
     # Match THIS plugin's loggers only (real names or Hermes' mangled
     # `hermes_plugins.<key>__meshtastic_platform.adapter` form) — but NOT the noisy
     # `meshtastic.*` radio library logger.
+    root = logging.getLogger()
+    # If the gateway already has a root handler that emits WARNING+, only take records
+    # BELOW WARNING here so WARNING/ERROR aren't logged twice. In standalone use (no
+    # such handler) we emit everything.
+    _other_warn = any(
+        h.level <= logging.WARNING for h in root.handlers if not getattr(h, "_mesh_debug", False)
+    )
+
     class _PluginOnly(logging.Filter):
         def filter(self, record: logging.LogRecord) -> bool:
             n = record.name
-            return "meshtastic_platform" in n or "meshtastic_hermes" in n
+            if "meshtastic_platform" not in n and "meshtastic_hermes" not in n:
+                return False
+            if _other_warn and record.levelno >= logging.WARNING:
+                return False  # let the existing root handler emit it (no duplicate)
+            return True
 
-    root = logging.getLogger()
     if not any(getattr(h, "_mesh_debug", False) for h in root.handlers):
         handler = logging.StreamHandler(sys.stderr)
         handler.setLevel(logging.DEBUG)

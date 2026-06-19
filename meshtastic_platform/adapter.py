@@ -104,12 +104,21 @@ if _HAVE_GATEWAY:
 
             pub.subscribe(self._on_rx, "meshtastic.receive")
             self._mark_connected()
-            logger.info(
-                "Meshtastic adapter connected to %s (node %s, reply allowed_channels=%r)",
-                self.host,
-                self._mgr.my_node_id(),
-                self.allowed_channels,
-            )
+            if self._mgr.is_connected():
+                logger.info(
+                    "Meshtastic adapter connected to %s (node %s, reply allowed_channels=%r)",
+                    self.host,
+                    self._mgr.my_node_id(),
+                    self.allowed_channels,
+                )
+            else:
+                logger.warning(
+                    "Meshtastic adapter could not reach %s yet — supervisor retrying "
+                    "(is another client holding the node's single TCP slot?); "
+                    "reply allowed_channels=%r",
+                    self.host,
+                    self.allowed_channels,
+                )
             return True
 
         async def disconnect(self) -> None:
