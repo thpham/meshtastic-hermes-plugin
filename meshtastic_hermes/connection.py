@@ -37,20 +37,27 @@ def enable_debug_logging() -> bool:
     # logger names directly. Attach a stderr handler to the ROOT logger that only
     # emits meshtastic records, and lower the root level so DEBUG/INFO propagate to
     # it. The gateway's own handler keeps its WARNING level, so nothing else is noisier.
-    class _MeshtasticOnly(logging.Filter):
+    # Match THIS plugin's loggers only (real names or Hermes' mangled
+    # `hermes_plugins.<key>__meshtastic_platform.adapter` form) — but NOT the noisy
+    # `meshtastic.*` radio library logger.
+    class _PluginOnly(logging.Filter):
         def filter(self, record: logging.LogRecord) -> bool:
-            return "meshtastic" in record.name.lower()
+            n = record.name
+            return "meshtastic_platform" in n or "meshtastic_hermes" in n
 
     root = logging.getLogger()
     if not any(getattr(h, "_mesh_debug", False) for h in root.handlers):
         handler = logging.StreamHandler(sys.stderr)
         handler.setLevel(logging.DEBUG)
         handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
-        handler.addFilter(_MeshtasticOnly())
+        handler.addFilter(_PluginOnly())
         handler._mesh_debug = True  # type: ignore[attr-defined]  # marker for dedup
         root.addHandler(handler)
     if root.level > logging.DEBUG or root.level == logging.NOTSET:
         root.setLevel(logging.DEBUG)
+    # Lowering root to DEBUG would otherwise unleash the radio library's very verbose
+    # per-packet DEBUG; keep it at WARNING so only our plugin's logs show.
+    logging.getLogger("meshtastic").setLevel(logging.WARNING)
     return True
 
 

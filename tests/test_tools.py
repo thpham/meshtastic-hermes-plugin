@@ -32,8 +32,11 @@ def test_enable_debug_logging_toggle(monkeypatch):
         yes = logging.LogRecord(
             "hermes_plugins.x__meshtastic_platform.adapter", logging.INFO, "", 0, "m", None, None
         )
-        no = logging.LogRecord("gateway.run", logging.INFO, "", 0, "m", None, None)
-        assert h.filter(yes) and not h.filter(no)
+        gw = logging.LogRecord("gateway.run", logging.INFO, "", 0, "m", None, None)
+        lib = logging.LogRecord("meshtastic.mesh_interface", logging.DEBUG, "", 0, "m", None, None)
+        assert h.filter(yes)          # our plugin (mangled name) passes
+        assert not h.filter(gw)       # unrelated logger excluded
+        assert not h.filter(lib)      # noisy radio library excluded
     finally:
         root.handlers[:] = saved_handlers
         root.setLevel(saved_level)
