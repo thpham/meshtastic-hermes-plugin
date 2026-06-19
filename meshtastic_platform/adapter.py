@@ -241,6 +241,18 @@ def register(ctx):
     if not _HAVE_GATEWAY:
         logger.warning("gateway.platforms.base unavailable — Meshtastic platform not registered")
         return
+
+    # Make the dormant-vs-active state visible: the gateway only creates+connects the
+    # adapter when MESHTASTIC_HOST is set (check_fn/env_enablement gate on it). Without
+    # this line, a missing host looks like "nothing happened" in the journal.
+    host = os.getenv("MESHTASTIC_HOST")
+    logger.info(
+        "meshtastic-platform registered (MESHTASTIC_HOST=%s, reply allowed_channels=%r); "
+        "the gateway activates the adapter only when MESHTASTIC_HOST is set",
+        host or "(unset — adapter will stay dormant)",
+        _allowed_channels_from_env(),
+    )
+
     ctx.register_platform(
         name="meshtastic",
         label="Meshtastic",
