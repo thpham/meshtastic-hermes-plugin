@@ -205,7 +205,10 @@ class ConnectionManager:
             except Exception:
                 pass
         self._iface = None
-        self._host = None
+        # NOTE: do NOT clear self._host/_port here. They are the *target* config used
+        # by _open()/the supervisor to (re)connect. _open() calls _close_locked()
+        # before building TCPInterface(self._host, ...), so nulling host here made it
+        # connect to None → "Connection refused" forever.
 
     # ------------------------------------------------------------------
 

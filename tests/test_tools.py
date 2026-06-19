@@ -68,6 +68,17 @@ def _inject(monkeypatch, iface):
     return iface
 
 
+def test_close_locked_preserves_target_host(monkeypatch):
+    # Regression: _close_locked must NOT clear _host/_port — _open() reads them right
+    # after calling _close_locked(), so nulling them made it connect to None.
+    mgr = connection.ConnectionManager()
+    mgr._host = "192.168.55.73"
+    mgr._port = 4403
+    mgr._close_locked()
+    assert mgr._host == "192.168.55.73"
+    assert mgr._port == 4403
+
+
 def test_supervisor_lifecycle(monkeypatch):
     # connect() starts a maintained connection (supervisor) without a real radio;
     # disconnect() stops it. _open is stubbed to "succeed".
