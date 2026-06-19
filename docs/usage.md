@@ -116,6 +116,20 @@ needed. Someone messages your node and the agent answers:
 | `MESHTASTIC_REPLY_CHANNELS="1"` or `"1,2"` | DMs + those channel indices (your private channels; public Primary/0 excluded) |
 | `MESHTASTIC_REPLY_ALL="true"`              | DMs + every channel (incl. public Primary — use with care)                     |
 
+**Authorization (separate from reply policy):** even when a message matches the reply
+policy, Hermes' gateway gates *who* may talk to the agent. By default meshtastic denies
+everyone (you'll see `WARNING gateway.run: Unauthorized user: !xxxx on meshtastic`). Allow
+senders by node id, or open it up:
+
+| Env | Effect |
+| --- | --- |
+| `MESHTASTIC_ALLOWED_USERS="!a696579c,!0aca4a9c"` | only these node ids may talk to the agent |
+| `MESHTASTIC_ALLOW_ALL_USERS=true` | any node on the mesh may talk to the agent |
+| _neither_ | deny all (default) |
+
+The reply policy (`MESHTASTIC_REPLY_CHANNELS`/`_ALL`) decides *which messages are
+considered*; the allow-list decides *which senders are permitted*. Both must pass.
+
 **Before deploying, validate the exact behavior locally** with the bridge simulator (no
 Hermes, no transmit) — see [Simulate the gateway loop](#standalone-testing-without-hermes)
 below. It uses the same routing/policy code as the adapter.

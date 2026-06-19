@@ -269,6 +269,12 @@ def register(ctx):
         install_hint="pip install meshtastic-hermes-plugin (bundles the meshtastic radio stack)",
         env_enablement_fn=_env_enablement,
         cron_deliver_env_var="MESHTASTIC_HOST",
+        # User authorization (the gateway gates who may talk to the agent). Without
+        # these, meshtastic defaults to deny-all. Allow specific node ids via
+        # MESHTASTIC_ALLOWED_USERS="!a696579c,!..." or everyone via
+        # MESHTASTIC_ALLOW_ALL_USERS=true.
+        allowed_users_env="MESHTASTIC_ALLOWED_USERS",
+        allow_all_env="MESHTASTIC_ALLOW_ALL_USERS",
         max_message_length=200,  # LoRa payloads are tiny
         emoji="📡",
         platform_hint=(

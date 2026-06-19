@@ -31,3 +31,11 @@ optional_env:
     description: "Set to 1 to log inbound messages and reply/skip decisions to the gateway journal."
     prompt: "Enable debug logging? (1/true)"
     password: false
+  - name: MESHTASTIC_ALLOWED_USERS
+    description: "Comma-separated node ids allowed to talk to the agent, e.g. '!a696579c,!0aca4a9c'. Empty + allow-all off = nobody (deny by default)."
+    prompt: "Allowed node ids (comma-separated)"
+    password: false
+  - name: MESHTASTIC_ALLOW_ALL_USERS
+    description: "Allow any node on the mesh to talk to the agent (1/true). Use with care on public channels."
+    prompt: "Allow all users? (true/false)"
+    password: false
