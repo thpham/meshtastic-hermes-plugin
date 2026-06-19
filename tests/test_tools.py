@@ -68,6 +68,23 @@ def _inject(monkeypatch, iface):
     return iface
 
 
+def test_supervisor_lifecycle(monkeypatch):
+    # connect() starts a maintained connection (supervisor) without a real radio;
+    # disconnect() stops it. _open is stubbed to "succeed".
+    mgr = connection.ConnectionManager()
+    monkeypatch.setattr(mgr, "_open", lambda: setattr(mgr, "_iface", object()))
+    st = mgr.connect("1.2.3.4")
+    try:
+        assert st["connected"] is True
+        assert mgr._want_connected is True
+        assert mgr._supervisor is not None and mgr._supervisor.is_alive()
+    finally:
+        mgr.disconnect()
+    assert mgr._want_connected is False
+    mgr._supervisor.join(timeout=5)
+    assert not mgr._supervisor.is_alive()
+
+
 def test_broadcast_uses_senddata_no_ack_wait(monkeypatch):
     fake = _inject(monkeypatch, FakeIface())
     res = json.loads(tools.send_text({"text": "hi", "channel_index": 1}))

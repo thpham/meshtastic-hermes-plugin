@@ -87,8 +87,14 @@ class ConnectionManager:
     def __init__(self) -> None:
         self._iface: Any = None
         self._host: str | None = None
+        self._port: int = DEFAULT_TCP_PORT
         self._lock = threading.Lock()
         self._observer = None  # set lazily to avoid import cycle
+        # Supervisor: keep the link up while connection is desired, so the gateway
+        # keeps RECEIVING across drops without anyone re-calling connect().
+        self._want_connected = False
+        self._stop = threading.Event()
+        self._supervisor: threading.Thread | None = None
 
     # ------------------------------------------------------------------
 
@@ -97,6 +103,23 @@ class ConnectionManager:
 
         Idempotent-ish: an existing connection is closed first.
         """
+        self._host = host
+        self._port = port
+        self._want_connected = True
+        self._stop.clear()
+        try:
+            self._open()
+        except MeshtasticUnavailable:
+            raise  # radio lib genuinely missing — no point supervising
+        except Exception as exc:
+            # Node unreachable at startup: don't fail hard, let the supervisor retry
+            # (keeps "connected if MESHTASTIC_HOST is set" true once it comes up).
+            logger.warning("Initial Meshtastic connect to %s failed: %s (supervisor will retry)", host, exc)
+        self._ensure_supervisor()
+        return self.status()
+
+    def _open(self) -> None:
+        """(Re)open the interface and wire subscriptions. Raises on failure."""
         mesh = _import_meshtastic()
         from pubsub import pub
 
@@ -107,27 +130,49 @@ class ConnectionManager:
             # subscriptions may linger and must be dropped before re-subscribing.
             self._close_locked()
 
-            iface = mesh.tcp_interface.TCPInterface(host, portNumber=port)
+            iface = mesh.tcp_interface.TCPInterface(self._host, portNumber=self._port)
             self._iface = iface
-            self._host = host
 
-            # Subscribe to the parent topic to capture ALL packet types,
-            # including encrypted PRIVATE_APP traffic on channels we cannot read.
+            # Subscribe to the parent topic to capture ALL packet types, including
+            # encrypted PRIVATE_APP traffic on channels we cannot read. (pubsub topics
+            # are global, so the observer keeps receiving across reconnects.)
             self._observer = _observer.get_observer()
             pub.subscribe(self._observer.on_receive, "meshtastic.receive")
-            # Detect drops (e.g. the node resetting the link / "Connection reset by
-            # peer") so is_connected() stays truthful and the next use cleanly
-            # reconnects instead of timing out on a dead interface.
             pub.subscribe(self._on_connection_lost, "meshtastic.connection.lost")
 
-        return self.status()
+    def _ensure_supervisor(self) -> None:
+        if self._supervisor and self._supervisor.is_alive():
+            return
+        self._supervisor = threading.Thread(
+            target=self._supervise, name="meshtastic-reconnect", daemon=True
+        )
+        self._supervisor.start()
+
+    def _supervise(self) -> None:
+        """Keep the link up while connection is desired (reconnect with backoff)."""
+        backoff = 2
+        while self._want_connected and not self._stop.is_set():
+            if self._iface is None:
+                try:
+                    self._open()
+                    logger.info("Meshtastic reconnected to %s", self._host)
+                    backoff = 2
+                except Exception as exc:
+                    logger.warning("Meshtastic reconnect failed: %s (retry in %ss)", exc, backoff)
+                    self._stop.wait(backoff)
+                    backoff = min(backoff * 2, 60)
+                    continue
+            self._stop.wait(3)  # poll for drops
 
     def _on_connection_lost(self, interface=None) -> None:
         with self._lock:
             self._iface = None
-        logger.warning("Meshtastic connection lost — marked disconnected (reconnect on next use)")
+        logger.warning("Meshtastic connection lost — supervisor will reconnect")
 
     def disconnect(self) -> dict[str, Any]:
+        # Stop the supervisor first so it doesn't immediately reconnect.
+        self._want_connected = False
+        self._stop.set()
         with self._lock:
             self._close_locked()
         return {"connected": False}
