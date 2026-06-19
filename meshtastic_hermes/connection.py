@@ -103,8 +103,9 @@ class ConnectionManager:
         from . import observer as _observer
 
         with self._lock:
-            if self._iface is not None:
-                self._close_locked()
+            # Always clean up first — even after a loss left _iface=None, stale pubsub
+            # subscriptions may linger and must be dropped before re-subscribing.
+            self._close_locked()
 
             iface = mesh.tcp_interface.TCPInterface(host, portNumber=port)
             self._iface = iface
@@ -132,13 +133,16 @@ class ConnectionManager:
         return {"connected": False}
 
     def _close_locked(self) -> None:
-        if self._observer is not None:
-            try:
-                from pubsub import pub
+        try:
+            from pubsub import pub
 
+            if self._observer is not None:
                 pub.unsubscribe(self._observer.on_receive, "meshtastic.receive")
-            except Exception:
-                pass
+            # Always drop the loss subscription too, so reconnects don't accumulate
+            # duplicate handlers (which made "connection lost" fire N times).
+            pub.unsubscribe(self._on_connection_lost, "meshtastic.connection.lost")
+        except Exception:
+            pass
         if self._iface is not None:
             try:
                 self._iface.close()
