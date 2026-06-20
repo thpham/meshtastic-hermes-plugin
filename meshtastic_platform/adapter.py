@@ -52,6 +52,46 @@ except Exception:  # pragma: no cover - exercised only outside Hermes
     _HAVE_GATEWAY = False
 
 
+# Meshtastic text payloads are tiny (~237 bytes max). Stay under it and cap how many
+# parts a single reply may flood onto the slow mesh.
+_MAX_MESH_BYTES = 200
+_MAX_PARTS = 5
+
+
+def _split_text(text: str, max_bytes: int = _MAX_MESH_BYTES) -> list[str]:
+    """Split text into chunks whose UTF-8 length is <= max_bytes, preferring word
+    boundaries; hard-splits any single token that is itself too long."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    out: list[str] = []
+    cur = ""
+    for word in text.split():
+        cand = f"{cur} {word}".strip() if cur else word
+        if len(cand.encode("utf-8")) <= max_bytes:
+            cur = cand
+            continue
+        if cur:
+            out.append(cur)
+            cur = ""
+        if len(word.encode("utf-8")) > max_bytes:
+            b = word.encode("utf-8")
+            while b:
+                piece = b[:max_bytes]
+                while piece:  # back off to a valid UTF-8 boundary
+                    try:
+                        out.append(piece.decode("utf-8"))
+                        break
+                    except UnicodeDecodeError:
+                        piece = piece[:-1]
+                b = b[len(piece):]
+        else:
+            cur = word
+    if cur:
+        out.append(cur)
+    return out
+
+
 def _allowed_channels_from_env():
     """Resolve the channel reply-allowlist from env.
 
@@ -186,10 +226,23 @@ if _HAVE_GATEWAY:
 
             target = gb.outbound_target(str(chat_id))
 
-            def _do_send() -> str:
+            # Meshtastic packets are tiny — split long replies, and cap the number of
+            # parts so a verbose reply can't flood the slow mesh.
+            parts = _split_text(content, _MAX_MESH_BYTES)
+            if not parts:
+                return SendResult(success=True, message_id=str(int(time.time() * 1000)))
+            if len(parts) > _MAX_PARTS:
+                parts = parts[:_MAX_PARTS]
+                last = parts[-1]
+                while len((last + " …").encode("utf-8")) > _MAX_MESH_BYTES:
+                    last = last[:-1]
+                parts[-1] = last + " …"
+                logger.warning("Meshtastic reply to %s truncated to %d parts", chat_id, _MAX_PARTS)
+
+            def _do_send(text: str) -> str:
                 return tools.send_text(
                     {
-                        "text": content,
+                        "text": text,
                         "dest_id": target["dest_id"],
                         "channel_index": target["channel_index"],
                         "pki": target["pki"],
@@ -197,13 +250,16 @@ if _HAVE_GATEWAY:
                     }
                 )
 
-            logger.debug("sending reply to chat_id=%s target=%s", chat_id, target)
-            raw = await self._loop.run_in_executor(None, _do_send)
-            data = json.loads(raw)
-            if data.get("error"):
-                logger.warning("Meshtastic reply to %s failed: %s", chat_id, data["error"])
-                return SendResult(success=False, error=data["error"])
-            logger.info("Meshtastic reply sent to %s", chat_id)
+            logger.debug("sending reply to chat_id=%s target=%s (%d part(s))", chat_id, target, len(parts))
+            for idx, part in enumerate(parts):
+                raw = await self._loop.run_in_executor(None, _do_send, part)
+                data = json.loads(raw)
+                if data.get("error"):
+                    logger.warning("Meshtastic reply to %s failed: %s", chat_id, data["error"])
+                    return SendResult(success=False, error=data["error"])
+                if idx < len(parts) - 1:
+                    await asyncio.sleep(1.0)  # pace multi-part sends on the slow mesh
+            logger.info("Meshtastic reply sent to %s (%d part(s))", chat_id, len(parts))
             return SendResult(success=True, message_id=str(int(time.time() * 1000)))
 
         async def get_chat_info(self, chat_id):
