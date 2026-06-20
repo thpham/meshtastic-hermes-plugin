@@ -99,6 +99,21 @@ def test_connection_lost_closes_stale_iface():
     assert mgr._stale_ifaces == []
 
 
+def test_connection_lost_from_stale_iface_keeps_current():
+    # A LATE connection.lost from an OLD interface (after a drop+reconnect) must not
+    # null the healthy current one — that would tear down the live link and spin the
+    # supervisor into a spurious reconnect loop. Only the current iface losing counts.
+    mgr = connection.ConnectionManager()
+    old, new = object(), object()
+    mgr._iface = new
+    mgr._on_connection_lost(interface=old)
+    assert mgr._iface is new            # live link untouched
+    assert old in mgr._stale_ifaces     # dead one queued for safe cleanup
+
+    mgr._on_connection_lost(interface=new)  # the *current* iface really losing
+    assert mgr._iface is None
+
+
 def test_supervisor_lifecycle(monkeypatch):
     # connect() starts a maintained connection (supervisor) without a real radio;
     # disconnect() stops it. _open is stubbed to "succeed".

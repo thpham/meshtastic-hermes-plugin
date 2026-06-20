@@ -184,8 +184,23 @@ class ConnectionManager:
         # the very thread we're on). Stash the dead interface for the supervisor/next
         # _open() to close safely.
         with self._lock:
+            # Honor WHICH interface died. After a drop+reconnect, an *old* iface's
+            # reader can still publish a late connection.lost; without this identity
+            # check it would null the healthy NEW _iface and trigger a spurious
+            # reconnect loop. Only the current interface losing means we're down.
+            if (
+                interface is not None
+                and self._iface is not None
+                and interface is not self._iface
+            ):
+                if interface not in self._stale_ifaces:
+                    self._stale_ifaces.append(interface)
+                logger.debug(
+                    "Ignoring connection.lost from a stale interface — current link is healthy"
+                )
+                return
             old = interface or self._iface
-            if old is not None:
+            if old is not None and old not in self._stale_ifaces:
                 self._stale_ifaces.append(old)
             self._iface = None
         logger.warning("Meshtastic connection lost — supervisor will reconnect")
